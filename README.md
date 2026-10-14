@@ -26,7 +26,8 @@ tells the user that the project stopped supporting them.
   out in one atomic transaction, and open pages show the revocation live over a WebSocket.
 - Anyone can run a **mirror**: a URL that serves the exact file, registered as a 6 hour lease on
   Arkiv. A keeper re-downloads it every two hours and renews the lease only while the bytes still
-  match. Users who verified a download can renew it too. Mirrors that go bad lapse on their own.
+  match. Users who verified a download can renew it too (`lifeboat fetch --vouch`). Mirrors that go
+  bad lapse on their own.
 - The **user** pins the publisher's address once (from the project's README, a signed tag, a QR
   code). Lifeboat reads Arkiv directly, with no Lifeboat server in between, tries mirrors freshest
   lease first, hashes the file locally, and refuses anything that does not match.
@@ -41,9 +42,11 @@ In a browser:
 1. Open the [demo app](https://0xmago77.github.io/lifeboat/#/app/lifeboat-cli?publisher=0x8fb633d00b49d851dbff111b0d7c1eec8f9dcea2).
    The app is Lifeboat's own CLI. You see the founder and current maintainer, the releases with
    their support windows, a red banner for the revoked 0.0.9, and the mirrors with their leases.
-2. Press **Download & verify**. The log shows each mirror being tried: the "official" download host
-   is dead, a poisoned mirror serves a modified tarball and is rejected on its hash, and a good
-   mirror wins. Only then is the file offered for saving.
+2. Press **Download & verify**. Mirrors are tried freshest lease first; the log shows each attempt,
+   and the file is offered for saving only after its sha256 matched the release. Then press
+   **Check every mirror**: each one is downloaded and hashed separately, so you see the "official"
+   download host is dead, a poisoned mirror serving a modified tarball is rejected on its hash, and
+   the good mirrors verify.
 3. Open [Check a file](https://0xmago77.github.io/lifeboat/#/check) and drop in any of the demo
    files linked at the bottom of that page: 0.1.0 is OK, 0.0.9 is REVOKED, 0.0.8 is END-OF-LIFE
    (its one day support window ended), and the tampered copy is TAMPERED.

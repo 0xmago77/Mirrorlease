@@ -322,6 +322,8 @@ function appView(appId: string, publisherParam: string) {
     saveEl ??= h("div", {})
     const btn = h("button", { class: "big", disabled: busy || st.mirrors.length === 0 }, busy ? "Working…" : "Download & verify")
     btn.addEventListener("click", () => void runDownload(rec, st, btn))
+    const all = h("button", { class: "small", disabled: busy || st.mirrors.length === 0 }, "Check every mirror")
+    all.addEventListener("click", () => void checkAll(rec, st, all))
     return h("section", { class: "card release" },
       h("div", { class: "row" },
         h("h2", {}, `${rec.versionName}`, " ", h("span", { class: "muted small" }, rec.channel)),
@@ -335,7 +337,7 @@ function appView(appId: string, publisherParam: string) {
         h("dt", {}, "Release"), h("dd", {}, keyLink(rec.key)),
       ),
       rec.notes ? h("p", { class: "notes" }, rec.notes) : null,
-      h("div", { class: "row" }, btn, h("span", { class: "muted" }, `${st.mirrors.length} mirror(s), freshest lease first. Bytes are hashed here, in your browser.`)),
+      h("div", { class: "row" }, btn, all, h("span", { class: "muted" }, `${st.mirrors.length} mirror(s), freshest lease first. Bytes are hashed here, in your browser.`)),
       logEl,
       saveEl,
     )
@@ -382,6 +384,39 @@ function appView(appId: string, publisherParam: string) {
       btn.disabled = false
       btn.textContent = "Download & verify"
     }
+  }
+
+  /** Downloads from every mirror separately and reports each one; saves nothing. */
+  const checkAll = async (rec: ReleaseView, st: AppStatus, btn: HTMLButtonElement) => {
+    if (busy || !logEl || !saveEl) return
+    busy = true
+    btn.disabled = true
+    clear(logEl)
+    clear(saveEl)
+    const label: Record<Attempt["status"], string> = { trying: "trying", dead: "dead", "wrong-bytes": "wrong bytes, rejected", ok: "verified" }
+    const counts = { ok: 0, bad: 0 }
+    await Promise.all(
+      uniqueByUrl(st.mirrors).map(async (m) => {
+        const row = h("li", {})
+        logEl!.append(row)
+        try {
+          await downloadVerified([{ url: m.url, key: m.key }], rec, {
+            timeoutMs: 20_000,
+            onAttempt: (a) => {
+              clear(row)
+              row.className = a.status
+              append(row, [h("span", { class: "st" }, label[a.status]), safeLink(a.url, a.url, "url"), h("span", { class: "detail" }, a.detail)])
+            },
+          })
+          counts.ok++
+        } catch {
+          counts.bad++
+        }
+      }),
+    )
+    append(saveEl, h("p", { class: "muted" }, `${counts.ok} mirror(s) serve the published bytes, ${counts.bad} do not. Nothing was saved; use Download & verify to get the file.`))
+    busy = false
+    btn.disabled = false
   }
 
   const releasesCard = (st: AppStatus, clock: Clock) =>
