@@ -101,11 +101,15 @@ async function main(argv: string[]): Promise<number> {
   const parsed = parseArgs(argv, BOOLEANS)
   const args = new Args(parsed)
   const [cmd, sub] = parsed.positionals
+  if (!cmd && parsed.flags.has("version")) {
+    line(VERSION)
+    return 0
+  }
   if (!cmd || args.bool("help") || cmd === "help") {
     line(HELP)
     return 0
   }
-  if (cmd === "--version" || cmd === "version") {
+  if (cmd === "version") {
     line(VERSION)
     return 0
   }

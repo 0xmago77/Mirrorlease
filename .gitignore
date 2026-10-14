@@ -8,3 +8,4 @@ web/dist/
 PRIOR_ART.md
 *.log
 coverage/
+.pack/

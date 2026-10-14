@@ -1,0 +1,13 @@
+# Runs the keeper every 2 hours. Mirror leases are 6 hours, so a working mirror is checked and
+# renewed about three times per lease, and a broken one lapses within 6 hours.
+[Unit]
+Description=Run the Lifeboat mirror keeper every 2 hours
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=2h
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
