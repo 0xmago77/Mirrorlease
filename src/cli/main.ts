@@ -2,7 +2,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs"
 import { basename, resolve } from "node:path"
-import { eq } from "@arkiv-network/sdk/query"
+import { eq, or } from "@arkiv-network/sdk/query"
 import { ExpirationTime } from "@arkiv-network/sdk/utils"
 import { formatEther, type Hash } from "viem"
 import {
@@ -20,9 +20,9 @@ import { sha256Hex, shortHash } from "../core/hash"
 import {
   base,
   type Client,
+  decodeMany,
   fetchAll,
   getClock,
-  loadTrust,
   makePublicClient,
   mirrorsByOperator,
   mirrorsBySha,
@@ -36,6 +36,7 @@ import {
   decodeAll,
   decodeEntity,
   type Hex,
+  type MirrorRecord,
   mirrorCreate,
   normalizeSha256,
   type ReleaseRecord,
@@ -203,9 +204,15 @@ async function myAppEntity(ctx: Ctx, app: string, me: Hex) {
   return owned.sort((a, b) => (a.createdAt > b.createdAt ? -1 : 1))[0]
 }
 
+async function ownedAbout(ctx: Ctx, me: Hex, shas: string[]) {
+  const bySha = shas.length === 1 ? eq("sha256", shas[0]!) : or(...shas.map((h) => eq("sha256", h)))
+  return decodeMany(await fetchAll(ctx.client.select("*").where(eq("lb", "1"), bySha).ownedBy(me)))
+}
+
 async function findOwnRelease(ctx: Ctx, sha: string, me: Hex): Promise<ReleaseRecord | undefined> {
-  const page = await ctx.client.select("*").where(...base(KIND.release), eq("sha256", sha)).ownedBy(me).limit(50).fetch()
-  return decodeAll(page.entities as never, "release").sort((a, b) => b.version - a.version)[0]
+  return (await ownedAbout(ctx, me, [sha]))
+    .filter((r): r is ReleaseRecord => r.kind === "release")
+    .sort((a, b) => b.version - a.version)[0]
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -339,14 +346,17 @@ async function revokeCmd(ctx: Ctx): Promise<number> {
   const reason = args.req("reason")
   const severity = args.num("severity") ?? 3
   const { wallet, address } = ctx.signer()
-  const rel = await findOwnRelease(ctx, sha, address)
+  let replacementSha: string | undefined
+  const replacementFile = args.str("replacement")
+  if (replacementFile) replacementSha = await sha256Hex(readFile(replacementFile))
+  // One query for everything we own about both hashes: the release, an earlier revocation, and
+  // whether the replacement is already published.
+  const owned = await ownedAbout(ctx, address, replacementSha ? [sha, replacementSha] : [sha])
+  const rel = owned.filter((r): r is ReleaseRecord => r.kind === "release" && r.sha256 === sha).sort((a, b) => b.version - a.version)[0]
   const app = assertAppId(rel?.app ?? args.req("app"))
   const versionCode = rel?.version ?? args.num("code") ?? 0
 
-  const existing = decodeAll(
-    await fetchAll(Q.revocationBySha(ctx.client, sha, address)),
-    "revocation",
-  )
+  const existing = owned.filter((r) => r.kind === "revocation" && r.sha256 === sha)
   if (existing.length > 0 && !args.bool("force")) {
     if (ctx.json) line(toJson({ existing: true, key: existing[0]!.key }))
     else {
@@ -358,7 +368,6 @@ async function revokeCmd(ctx: Ctx): Promise<number> {
 
   const creates = []
   let replacement: ReturnType<typeof releaseInputFromFile> | undefined
-  const replacementFile = args.str("replacement")
   if (replacementFile) {
     const bytes = readFile(replacementFile)
     const rsha = await sha256Hex(bytes)
@@ -375,7 +384,7 @@ async function revokeCmd(ctx: Ctx): Promise<number> {
       ...(replacement ? { replacedBySha256: replacement.sha256 } : {}),
     }),
   )
-  const replacementExists = replacement ? await findOwnRelease(ctx, replacement.sha256, address) : undefined
+  const replacementExists = replacement ? owned.find((r) => r.kind === "release" && r.sha256 === replacement!.sha256) : undefined
   if (replacement && !replacementExists) creates.push(releaseCreate(replacement))
 
   // One transaction: either the revocation and its replacement both land, or neither does.
@@ -413,11 +422,15 @@ async function mirrorAddCmd(ctx: Ctx): Promise<number> {
 
   // The release tells us the app id and the size. Any creator: the operator is not the one who has
   // to trust it; every downloader checks against their own pinned publisher anyway.
-  const releases = await releasesByShaAnyone(ctx.client, sha)
+  // One query: everything live with this hash (its releases, and the mirrors already registered).
+  const about = decodeMany(await fetchAll(ctx.client.select("*").where(eq("lb", "1"), eq("sha256", sha))))
+  const releases = about.filter((r): r is ReleaseRecord => r.kind === "release")
   const app = assertAppId(args.str("app") ?? releases[0]?.app ?? "")
   const size = releases[0]?.size
 
-  const mine = (await mirrorsByOperator(ctx.client, address)).filter((m) => m.sha256 === sha && m.url === new URL(url).toString())
+  const mine = about.filter(
+    (m): m is MirrorRecord => m.kind === "mirror" && m.creator === address && m.url === new URL(url).toString(),
+  )
   if (mine.length > 0 && !args.bool("force")) {
     if (ctx.json) line(toJson({ existing: true, key: mine[0]!.key }))
     else {
@@ -680,7 +693,7 @@ async function updatesCmd(ctx: Ctx): Promise<number> {
   const app = assertAppId(ctx.args.pos(0, "<app>"))
   const publisher = publisherArg(ctx.args)
   const since = ctx.args.num("since") ?? 0
-  const trust = await loadTrust(ctx.client, publisher, app)
+  const { trust } = await appStatus(ctx.client, publisher, app)
   const newer = await releasesSince(ctx.client, trust, app, since)
   if (ctx.json) line(toJson(newer))
   else if (newer.length === 0) line(`no release of ${app} newer than code ${since}`)
@@ -755,7 +768,7 @@ function printCost() {
   const rl = rpcStats.rateLimit
   err(
     `rpc: ${rpcStats.requests} request(s), Arkiv-Cost total ${rpcStats.cost}` +
-      (rl ? `, budget ${rl.remaining}/${rl.limit} left (window resets in ${rl.resetSeconds}s)` : ""),
+      (rl ? `; request rate limit ${rl.remaining}/${rl.limit} left, resets in ${rl.resetSeconds}s` : ""),
   )
 }
 

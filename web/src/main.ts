@@ -115,13 +115,12 @@ function addrLink(a: string) {
 }
 
 function costNote(before: { requests: number; cost: number }) {
-  const rl = rpcStats.rateLimit
+  const cost = rpcStats.cost - before.cost
   return h(
     "p",
     { class: "cost" },
     `This view made ${rpcStats.requests - before.requests} RPC request(s) to Arkiv` +
-      (rpcStats.cost - before.cost > 0 ? `, query cost ${rpcStats.cost - before.cost}` : "") +
-      (rl ? `. Anonymous budget left for your connection: ${rl.remaining} of ${rl.limit}.` : "."),
+      (cost > 0 ? `, query cost ${cost} of the public RPC's anonymous budget (10000 per window).` : "."),
   )
 }
 
@@ -586,12 +585,10 @@ function rawView(params: URLSearchParams) {
   const sha = "<sha256 of the file>"
   const select = JSON.stringify(toRpcSelect("*"))
   const queries: [string, string][] = [
-    ["Releases of an app by the pinned publisher (sort by version yourself)", Q.releases(client, app, pub).toString()],
-    ["Updates newer than versionCode 9", Q.releasesSince(client, app, 9, pub).toString()],
-    ["Is this file published?", Q.releaseBySha(client, sha, pub).toString()],
-    ["Is this file revoked?", Q.revocationBySha(client, sha, pub).toString()],
-    ["Mirrors for a file (any operator; sort by $expiresAt yourself)", Q.mirrorsBySha(client, sha).toString()],
-    ["Who maintains the app now ($owner) and who founded it ($creator)", Q.appsByPublisher(client, pub, app).toString()],
+    ["App page, one query: the app entity, the publisher's releases and revocations, and every mirror for the app. Filter by kind, sort by version and $expiresAt yourself.", Q.appBundle(client, app, pub).toString()],
+    ["Check a file, one query: anything about this hash, plus everything the publisher created (app entities, so you can see maintainer handoffs).", Q.fileBundle(client, sha, pub).toString()],
+    ["Updates newer than versionCode 9 (range query on a u64 attribute)", Q.releasesSince(client, app, 9, pub).toString()],
+    ["Mirrors for one file, any operator", Q.mirrorsBySha(client, sha).toString()],
   ]
   const shq = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`
   const curl = (q: string) =>
@@ -627,7 +624,7 @@ console.log(releases)`
     ),
     h("section", { class: "card" },
       h("h2", {}, "With plain JSON-RPC"),
-      h("p", { class: "muted" }, "arkiv_query takes the query text and a selection. These are the exact queries Lifeboat sends."),
+      h("p", { class: "muted" }, "arkiv_query takes the query text and a selection. These are the exact queries Lifeboat sends. The public RPC bills each arkiv_query the same, whatever it returns, so Lifeboat fetches several kinds at once with OR and sorts on the client."),
       queries.map(([title, q]) => [h("h3", {}, title), h("pre", {}, h("code", {}, curl(q)))]),
       h("p", { class: "muted small" },
         "Expiry comes back as a block number. arkiv_getBlockTiming returns the current block and its timestamp, and blocks are 2 seconds apart, which is how the page turns blocks into dates."),

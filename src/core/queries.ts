@@ -1,21 +1,29 @@
 // Every Arkiv read Lifeboat makes. arkiv/schema.md quotes these; keep them in sync.
+//
+// The public RPC charges a flat 100 units per arkiv_query (whatever it selects or returns) against
+// an anonymous budget of 10000 units, while getBlockTiming and eth_getLogs are free. So the views
+// are built from as few queries as possible, using OR to fetch several kinds at once, and filter
+// on the client.
 
 import { createPublicClient, ENTITY_EVENTS_ABI, type Entity, type PublicArkivClient } from "@arkiv-network/sdk"
-import { key as keyAttr, u64 } from "@arkiv-network/sdk/attr"
+import { addr, u64 } from "@arkiv-network/sdk/attr"
 import { tiramisu } from "@arkiv-network/sdk/chains"
-import { eq, gt } from "@arkiv-network/sdk/query"
-import { arkivHttp } from "./rpc"
-import { ARKIV_ADDRESS, HISTORY_MAX_DEAD, HISTORY_MAX_PROBES, LOG_RANGE, HISTORY_STEP, KIND, type Kind, NAMESPACE_ATTR, NAMESPACE_VALUE, PAGE_SIZE, RPC_HTTP } from "./constants"
+import { eq, gt, or } from "@arkiv-network/sdk/query"
 import {
-  type AppRecord,
-  decodeAll,
-  type Hex,
-  type MirrorRecord,
-  type ReleaseRecord,
-  type RevocationRecord,
-} from "./schema"
+  ARKIV_ADDRESS,
+  HISTORY_MAX_DEAD,
+  KIND,
+  type Kind,
+  LOG_RANGE,
+  NAMESPACE_ATTR,
+  NAMESPACE_VALUE,
+  PAGE_SIZE,
+  RPC_HTTP,
+} from "./constants"
+import { decodeAll, decodeEntity, type Hex, type LifeboatRecord, type MirrorRecord, type ReleaseRecord } from "./schema"
+import { arkivHttp } from "./rpc"
 import type { Clock } from "./time"
-import { buildTrust, roleOf, signersFor, type Trust } from "./trust"
+import { roleOf, signersFor, type Trust } from "./trust"
 
 export type Client = PublicArkivClient
 
@@ -23,15 +31,17 @@ export function makePublicClient(rpcUrl: string = RPC_HTTP): Client {
   return createPublicClient({ chain: tiramisu, transport: arkivHttp(rpcUrl) }) as Client
 }
 
-/** Namespace + kind: the first two predicates of every query. */
+const ns = () => eq(NAMESPACE_ATTR, NAMESPACE_VALUE)
+
+/** Namespace + kind: the first two predicates of the single-kind queries. */
 export function base(kind: Kind) {
-  return [eq(NAMESPACE_ATTR, NAMESPACE_VALUE), eq("kind", kind)]
+  return [ns(), eq("kind", kind)]
 }
 
 type Builder = ReturnType<Client["select"]>
 
-/** Walks pages (newest first, max 200 each) up to `maxPages`. */
-export async function fetchAll(builder: Builder, maxPages = 10): Promise<Entity[]> {
+/** Walks pages (newest first, max 200 each) up to `maxPages`. Each page is one billed query. */
+export async function fetchAll(builder: Builder, maxPages = 5): Promise<Entity[]> {
   const out: Entity[] = []
   let page = await builder.limit(PAGE_SIZE).fetch()
   for (let i = 0; ; i++) {
@@ -42,6 +52,10 @@ export async function fetchAll(builder: Builder, maxPages = 10): Promise<Entity[
   return out
 }
 
+export function decodeMany(entities: Entity[]): LifeboatRecord[] {
+  return entities.map(decodeEntity).filter((r): r is LifeboatRecord => r !== null)
+}
+
 export async function getClock(client: Client): Promise<Clock> {
   return client.getBlockTiming()
 }
@@ -49,12 +63,14 @@ export async function getClock(client: Client): Promise<Clock> {
 // --- query builders, exported so the "read it without us" page can print their exact text ---
 
 export const Q = {
-  appsByPublisher: (c: Client, publisher: Hex, app?: string) => {
-    const b = c.select("*").where(...base(KIND.app)).createdBy(publisher)
-    return app ? b.where(eq("app", app)) : b
-  },
-  releases: (c: Client, app: string, signer: Hex) =>
-    c.select("*").where(...base(KIND.release), eq("app", app)).createdBy(signer),
+  /** App page, one query: the app entity, the signer's releases and revocations, every mirror. */
+  appBundle: (c: Client, app: string, signer: Hex) =>
+    c.select("*").where(ns(), eq("app", app), or(eq("$creator", addr(signer)), eq("kind", KIND.mirror))),
+  /** After a handoff: what the maintainer created for this app. */
+  appBySigner: (c: Client, app: string, signer: Hex) => c.select("*").where(ns(), eq("app", app)).createdBy(signer),
+  /** Check a file, one query: anything about this hash, plus everything the signer created. */
+  fileBundle: (c: Client, sha: string, signer: Hex) =>
+    c.select("*").where(ns(), or(eq("sha256", sha), eq("$creator", addr(signer)))),
   releasesSince: (c: Client, app: string, version: number, signer: Hex) =>
     c
       .select("*")
@@ -63,108 +79,101 @@ export const Q = {
   releaseBySha: (c: Client, sha: string, signer: Hex) =>
     c.select("*").where(...base(KIND.release), eq("sha256", sha)).createdBy(signer),
   releaseByShaAnyone: (c: Client, sha: string) => c.select("*").where(...base(KIND.release), eq("sha256", sha)),
-  revocationBySha: (c: Client, sha: string, signer: Hex) =>
-    c.select("*").where(...base(KIND.revocation), eq("sha256", sha)).createdBy(signer),
-  revocationsForApp: (c: Client, app: string, signer: Hex) =>
-    c.select("*").where(...base(KIND.revocation), eq("app", app)).createdBy(signer),
   mirrorsBySha: (c: Client, sha: string) => c.select("*").where(...base(KIND.mirror), eq("sha256", sha)),
   mirrorsByOperator: (c: Client, operator: Hex) => c.select("*").where(...base(KIND.mirror)).createdBy(operator),
+  ownedBy: (c: Client, kind: Kind, owner: Hex) => c.select("*").where(...base(kind)).ownedBy(owner),
 }
 
-// --- higher-level reads ---
-
-export async function loadTrust(c: Client, publisher: Hex, app?: string): Promise<Trust> {
-  const apps = decodeAll(await fetchAll(Q.appsByPublisher(c, publisher, app)), "app")
-  return buildTrust(publisher, apps)
-}
-
-async function perSigner<T>(signers: Hex[], fn: (s: Hex) => Promise<T[]>): Promise<T[]> {
-  return (await Promise.all(signers.map(fn))).flat()
-}
-
-export async function listReleases(c: Client, trust: Trust, app: string): Promise<ReleaseRecord[]> {
-  const all = await perSigner(signersFor(trust, app), async (s) => decodeAll(await fetchAll(Q.releases(c, app, s)), "release"))
-  return all.filter((r) => roleOf(trust, r.creator, r.app)).sort((a, b) => b.version - a.version || cmpBig(b.createdAt, a.createdAt))
-}
+// --- reads used by single commands ---
 
 export async function releasesSince(c: Client, trust: Trust, app: string, version: number): Promise<ReleaseRecord[]> {
-  const all = await perSigner(signersFor(trust, app), async (s) =>
-    decodeAll(await fetchAll(Q.releasesSince(c, app, version, s)), "release"),
+  const lists = await Promise.all(
+    signersFor(trust, app).map(async (s) => decodeAll(await fetchAll(Q.releasesSince(c, app, version, s)), "release")),
   )
-  return all.filter((r) => roleOf(trust, r.creator, r.app)).sort((a, b) => b.version - a.version)
+  return lists
+    .flat()
+    .filter((r) => roleOf(trust, r.creator, r.app))
+    .sort((a, b) => b.version - a.version)
 }
 
-export async function listRevocations(c: Client, trust: Trust, app: string): Promise<RevocationRecord[]> {
-  const all = await perSigner(signersFor(trust, app), async (s) =>
-    decodeAll(await fetchAll(Q.revocationsForApp(c, app, s)), "revocation"),
-  )
-  return all.filter((r) => roleOf(trust, r.creator, r.app))
-}
-
-export async function releasesBySha(c: Client, trust: Trust, sha: string, atBlock?: bigint): Promise<ReleaseRecord[]> {
-  return perSigner(signersFor(trust), async (s) => {
-    const b = Q.releaseBySha(c, sha, s)
-    if (atBlock !== undefined) b.atBlock(atBlock)
-    return decodeAll(await fetchAll(b, 1), "release")
-  })
-}
-
-/** Releases of this hash by anyone, for display only ("other addresses claim this file"). */
+/** Releases of this hash by anyone, for the mirror operator (who is not the one deciding trust). */
 export async function releasesByShaAnyone(c: Client, sha: string): Promise<ReleaseRecord[]> {
   const page = await Q.releaseByShaAnyone(c, sha).limit(20).fetch()
   return decodeAll(page.entities as unknown as Entity[], "release")
 }
 
-export async function revocationsBySha(c: Client, trust: Trust, sha: string): Promise<RevocationRecord[]> {
-  return perSigner(signersFor(trust), async (s) => decodeAll(await fetchAll(Q.revocationBySha(c, sha, s)), "revocation"))
-}
-
 export async function mirrorsBySha(c: Client, sha: string): Promise<MirrorRecord[]> {
-  return decodeAll(await fetchAll(Q.mirrorsBySha(c, sha), 5), "mirror")
+  return decodeAll(await fetchAll(Q.mirrorsBySha(c, sha)), "mirror")
 }
 
 export async function mirrorsByOperator(c: Client, operator: Hex): Promise<MirrorRecord[]> {
   return decodeAll(await fetchAll(Q.mirrorsByOperator(c, operator)), "mirror")
 }
 
+// --- history: finding a release that has expired (EOL) ---
+
+type Lifetime = { key: Hex; created: bigint; expires: bigint }
+
 /**
- * Every entity a signer ever created, with its last known expiry, from EntityCreated and
- * ExpiryExtended logs (both index the owner). Paged because eth_getLogs caps the block range.
+ * Every entity a signer created, with the block it was created in and its last known expiry, from
+ * EntityCreated and ExpiryExtended logs (both index the owner). eth_getLogs is free on the public
+ * RPC but capped at 100000 blocks per call, so the range is paged.
  */
-export async function createdHistory(c: Client, signer: Hex, fromBlock: bigint, toBlock: bigint) {
-  const expiry = new Map<Hex, bigint>()
+export async function createdHistory(c: Client, signer: Hex, fromBlock: bigint, toBlock: bigint): Promise<Lifetime[]> {
+  const life = new Map<Hex, Lifetime>()
   const ranges: [bigint, bigint][] = []
   for (let from = fromBlock; from <= toBlock; from += LOG_RANGE + 1n) {
     ranges.push([from, from + LOG_RANGE > toBlock ? toBlock : from + LOG_RANGE])
   }
   for (let i = 0; i < ranges.length; i += 4) {
     const chunk = await Promise.all(
-      ranges.slice(i, i + 4).map(async ([from, to]) => {
-        const [created, extended] = await Promise.all([
+      ranges.slice(i, i + 4).map(async ([from, to]) =>
+        Promise.all([
           c.getLogs({ address: ARKIV_ADDRESS, event: ENTITY_EVENTS_ABI[0], args: { owner: signer }, fromBlock: from, toBlock: to }),
           c.getLogs({ address: ARKIV_ADDRESS, event: ENTITY_EVENTS_ABI[2], args: { owner: signer }, fromBlock: from, toBlock: to }),
-        ])
-        return [...created, ...extended]
-      }),
+        ]),
+      ),
     )
-    for (const log of chunk.flat()) {
-      const k = log.args.entityKey as Hex | undefined
-      const at = log.args.expiresAt as bigint | undefined
-      if (!k || at === undefined) continue
-      const prev = expiry.get(k)
-      if (prev === undefined || at > prev) expiry.set(k, at)
+    for (const [created, extended] of chunk) {
+      for (const log of created) {
+        const k = log.args.entityKey as Hex
+        life.set(k, { key: k, created: log.blockNumber ?? 0n, expires: log.args.expiresAt as bigint })
+      }
+      for (const log of extended) {
+        const l = life.get(log.args.entityKey as Hex)
+        const at = log.args.expiresAt as bigint
+        if (l && at > l.expires) l.expires = at
+      }
     }
   }
-  return expiry
+  return [...life.values()]
 }
 
 /**
- * Finds a release of this hash that existed and has since expired (EOL).
- *
- * Expired entities no longer match a query at the head, so this reads history: the signer's
- * EntityCreated / ExpiryExtended logs give every entity they made and when it expired, and an
- * arkiv_query with atBlock = (expiry - 1) reads each dead one as it was on its last day. If the
- * node refuses the logs, it falls back to probing the state every HISTORY_STEP.
+ * The fewest blocks such that every dead entity was alive at one of them (greedy interval
+ * stabbing: sort by last live block, take it, skip every interval it covers). Reading the state at
+ * those blocks sees every expired entity at least once, at 100 units a read instead of one read per
+ * entity.
+ */
+export function stabbingBlocks(lifetimes: Lifetime[], head: bigint): bigint[] {
+  const dead = lifetimes
+    .filter((l) => l.expires <= head && l.expires > l.created)
+    .map((l) => ({ start: l.created, end: l.expires - 1n }))
+    .sort((a, b) => (a.end === b.end ? 0 : a.end < b.end ? -1 : 1))
+  const points: bigint[] = []
+  for (const iv of dead) {
+    const last = points[points.length - 1]
+    if (last !== undefined && last >= iv.start && last <= iv.end) continue
+    points.push(iv.end)
+  }
+  // Newest first: a recently ended support window is the likeliest answer.
+  return points.reverse().slice(0, HISTORY_MAX_DEAD)
+}
+
+/**
+ * Finds releases of this hash that existed and have since expired. Expired entities do not match
+ * queries at the head, so this reads the signers' entity logs, works out the blocks at which every
+ * now-dead entity was alive, and queries the state at those blocks with atBlock.
  */
 export async function findExpiredRelease(
   c: Client,
@@ -174,66 +183,14 @@ export async function findExpiredRelease(
   sinceBlock: bigint,
   onProbe?: (block: bigint) => void,
 ): Promise<ReleaseRecord[]> {
-  try {
-    const found: ReleaseRecord[] = []
-    for (const signer of signersFor(trust)) {
-      const history = await createdHistory(c, signer, sinceBlock, clock.currentBlock)
-      // Newest first, and capped: each one costs a query against the anonymous budget.
-      const dead = [...history]
-        .filter(([, exp]) => exp <= clock.currentBlock)
-        .sort((a, b) => (a[1] === b[1] ? 0 : a[1] > b[1] ? -1 : 1))
-        .slice(0, HISTORY_MAX_DEAD)
-      for (let i = 0; i < dead.length; i += 6) {
-        const res = await Promise.all(
-          dead.slice(i, i + 6).map(async ([k, exp]) => {
-            onProbe?.(exp - 1n)
-            const page = await c
-              .select("*")
-              .where(eq("$key", keyAttr(k)), ...base(KIND.release), eq("sha256", sha))
-              .atBlock(exp - 1n)
-              .limit(1)
-              .fetch()
-            return decodeAll(page.entities as unknown as Entity[], "release")
-          }),
-        )
-        found.push(...res.flat().filter((r) => roleOf(trust, r.creator, r.app)))
-      }
+  for (const signer of signersFor(trust)) {
+    const blocks = stabbingBlocks(await createdHistory(c, signer, sinceBlock, clock.currentBlock), clock.currentBlock)
+    for (const b of blocks) {
+      onProbe?.(b)
+      const page = await Q.releaseBySha(c, sha, signer).atBlock(b).limit(10).fetch()
+      const hits = decodeAll(page.entities as unknown as Entity[], "release").filter((r) => roleOf(trust, r.creator, r.app))
+      if (hits.length > 0) return hits
     }
-    return found
-  } catch {
-    return probeHistory(c, trust, sha, clock, sinceBlock, onProbe)
-  }
-}
-
-/** Fallback: read the state every HISTORY_STEP back to `sinceBlock`. Misses very short windows. */
-async function probeHistory(
-  c: Client,
-  trust: Trust,
-  sha: string,
-  clock: Clock,
-  sinceBlock: bigint,
-  onProbe?: (block: bigint) => void,
-): Promise<ReleaseRecord[]> {
-  const step = BigInt(Math.max(1, Math.floor(HISTORY_STEP / clock.blockDuration)))
-  const blocks: bigint[] = []
-  for (let b = clock.currentBlock - step; b > sinceBlock && blocks.length < HISTORY_MAX_PROBES; b -= step) blocks.push(b)
-  for (let i = 0; i < blocks.length; i += 6) {
-    const results = await Promise.all(
-      blocks.slice(i, i + 6).map(async (b) => {
-        onProbe?.(b)
-        try {
-          return await releasesBySha(c, trust, sha, b)
-        } catch {
-          return []
-        }
-      }),
-    )
-    const hit = results.flat().filter((r) => roleOf(trust, r.creator, r.app))
-    if (hit.length > 0) return hit
   }
   return []
-}
-
-function cmpBig(a: bigint, b: bigint): number {
-  return a === b ? 0 : a > b ? 1 : -1
 }

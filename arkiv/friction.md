@@ -156,7 +156,26 @@ Surface: `node_modules/@arkiv-network/sdk/package.json`.
 `LICENSE.md` (MIT) is in the package, but `package.json` has no `license`, so license scanners
 report it as unknown. Found while writing our credits table. Suggested fix: add `"license": "MIT"`.
 
-TYPE_PLACEHOLDER
+## 7. A range query with a bare number silently matches nothing on `u64` attributes
+
+Surface: `@arkiv-network/sdk/query` `gt()` / `lt()` with an untyped number.
+
+Expected: `gt("version", 0)` on entities whose `version` is `u64(1)`…`u64(4)` returns them, or fails
+with a type mismatch.
+
+Actual: the SDK renders the bare `0` as `i32(0)` (`version > i32(0)`), the node accepts the query,
+and it returns zero entities. No error, no warning. Four matching releases existed. With
+`gt("version", u64(0n))` all four come back.
+
+Steps: create an entity with `attributes: { version: u64(5n) }`, then run
+`client.select({ key: true }).where(gt("version", 0)).fetch()`.
+
+Why it matters: the SDK's own docs say a bare number defaults to `i32`, which is reasonable for
+writes, but on the read side it turns a typo-level mistake into an empty result that looks like
+"no data". We found it only because we were testing on purpose; our code always uses `u64()`.
+
+Suggested fix: have the node reject (or warn on) comparisons between different numeric types, or
+have the SDK refuse untyped numbers in range predicates.
 
 ## Tested paths that worked
 
