@@ -1,0 +1,38 @@
+{
+  "name": "lifeboat-cli",
+  "version": "0.1.0",
+  "description": "Keep software downloads working and verifiable when the project's site is blocked, taken down or hacked. Release manifests and mirrors live on Arkiv.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "lifeboat": "dist/lifeboat.mjs"
+  },
+  "files": [
+    "dist/lifeboat.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "lifeboat": "tsx src/cli/main.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit",
+    "build:cli": "node scripts/build-cli.mjs",
+    "build:web": "vite build --config web/vite.config.ts",
+    "dev:web": "vite --config web/vite.config.ts",
+    "seed": "tsx scripts/seed-demo.ts",
+    "keeper": "tsx src/cli/main.ts keeper --once"
+  },
+  "devDependencies": {
+    "@arkiv-network/sdk": "^0.8.1",
+    "@types/node": "^26.6.5",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "viem": "^2.57.7",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.4"
+  }
+}
