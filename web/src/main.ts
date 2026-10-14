@@ -70,8 +70,6 @@ function route() {
   return homeView()
 }
 
-window.addEventListener("hashchange", route)
-route()
 
 // ---------------------------------------------------------------------------------------------
 // pins: trust on first use. The address in a link is only a claim; once you confirm it for an app,
@@ -494,7 +492,7 @@ function appView(appId: string, publisherParam: string) {
 function checkView(params: URLSearchParams) {
   const pins = loadPins()
   const app = params.get("app") ?? ""
-  const pub = params.get("publisher") ?? (app && pins[app]) ?? DEMO_PUBLISHER
+  const pub = params.get("publisher") || (app && pins[app]) || DEMO_PUBLISHER
   const pubInput = h("input", { value: pub, class: "mono", spellcheck: "false", "aria-label": "Publisher address" })
   const appInput = h("input", { value: app, placeholder: "optional, e.g. lifeboat-cli", spellcheck: "false", "aria-label": "App id" })
   const fileInput = h("input", { type: "file" })
@@ -649,3 +647,7 @@ ws.watchEntityEvents({
     ),
   ])
 }
+
+// Start last, so every const above is initialised before the first view renders.
+window.addEventListener("hashchange", route)
+route()

@@ -42,6 +42,8 @@ export const EXPIRATION = {
 export const HISTORY_STEP = 6 * HOUR
 /** Upper bound on history probes for one lookup, so an unknown file never costs hundreds of calls. */
 export const HISTORY_MAX_PROBES = 240
+/** How many expired entities of one signer the EOL lookup reads back, newest first. */
+export const HISTORY_MAX_DEAD = 60
 
 export const PAGE_SIZE = 200
 

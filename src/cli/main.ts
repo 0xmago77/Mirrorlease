@@ -25,6 +25,7 @@ import {
   loadTrust,
   makePublicClient,
   mirrorsByOperator,
+  mirrorsBySha,
   Q,
   releasesByShaAnyone,
   releasesSince,
@@ -45,7 +46,7 @@ import {
 import { appStatus, checkHash } from "../core/service"
 import { blockToMs, type Clock, formatDate, formatDuration } from "../core/time"
 import { describeError, rpcStats } from "../core/rpc"
-import { isAddress, lower } from "../core/trust"
+import { isAddress, lower, roleOf, signersFor } from "../core/trust"
 import type { Verdict } from "../core/verdict"
 import { Args, parseArgs, UsageError } from "./args"
 import { c, chip, err, line, toJson } from "./out"
@@ -694,24 +695,48 @@ async function watchCmd(ctx: Ctx): Promise<number> {
   const { tiramisu } = await import("@arkiv-network/sdk/chains")
   const { webSocket } = await import("viem")
   const ws = createPublicClient({ chain: tiramisu, transport: webSocket(ctx.args.str("ws") ?? RPC_WS) })
-  const trust = await loadTrust(ctx.client, publisher, app)
-  line(`watching ${app} for revocations, releases and mirrors (Ctrl-C to stop)`)
+  let st = await appStatus(ctx.client, publisher, app)
+  const signers = () => new Set<string>(signersFor(st.trust, app))
+  const knownMirrors = new Set(st.mirrors.map((m) => m.key))
+  const say = (obj: Record<string, unknown>, text: string) => line(ctx.json ? toJson(obj) : text)
+  line(ctx.json ? toJson({ event: "watching", app, publisher }) : `watching ${app} for revocations, releases and mirrors (Ctrl-C to stop)`)
+
+  // The chain carries every app's events. Only entities created by the pinned signers are fetched
+  // one by one; a possible new mirror (created with permissionlessExtension) triggers at most one
+  // mirror re-read per minute. That keeps a long-running watch inside the anonymous query budget.
+  let lastMirrorCheck = 0
+  const checkMirrors = async () => {
+    if (!st.recommended || Date.now() - lastMirrorCheck < 60_000) return
+    lastMirrorCheck = Date.now()
+    const now = (await mirrorsBySha(ctx.client, st.recommended.sha256)).filter((m) => m.app === app)
+    for (const m of now) {
+      if (knownMirrors.has(m.key)) continue
+      knownMirrors.add(m.key)
+      say({ event: "mirror", mirror: m }, `${chip("MIRROR", "info")} ${m.url} for ${st.recommended.versionName}, by ${m.creator}`)
+    }
+  }
   ws.watchEntityEvents({
     onEntityCreated: async (ev) => {
       try {
-        const entity = decodeEntity((await ctx.client.getEntity(ev.entityKey)) as never)
-        if (!entity || entity.app !== app) return
-        const role = entity.creator === trust.pinned ? "publisher" : entity.creator === trust.apps.get(app)?.owner ? "maintainer" : null
-        const who = role ?? `untrusted ${entity.creator}`
-        if (ctx.json) line(toJson({ event: "created", role, entity }))
-        else if (entity.kind === "revocation" && role) line(`${chip("REVOKED", "bad")} ${entity.sha256} by ${who}: ${entity.reason}`)
-        else if (entity.kind === "release") line(`${chip("RELEASE", role ? "good" : "warn")} ${entity.versionName} ${entity.sha256} by ${who}`)
-        else if (entity.kind === "mirror") line(`${chip("MIRROR", "info")} ${entity.url} for ${shortHash(entity.sha256)}`)
-      } catch {
-        // Entities created and deleted within one poll are not worth a crash.
+        if (signers().has(lower(ev.owner))) {
+          const entity = decodeEntity((await ctx.client.getEntity(ev.entityKey)) as never)
+          if (!entity || entity.app !== app) return
+          const role = roleOf(st.trust, entity.creator, app)
+          if (entity.kind === "revocation") say({ event: "revocation", role, entity }, `${chip("REVOKED", "bad")} ${entity.sha256} by the ${role}: ${entity.reason}`)
+          if (entity.kind === "release") say({ event: "release", role, entity }, `${chip("RELEASE", "good")} ${entity.versionName} ${entity.sha256} by the ${role}`)
+          st = await appStatus(ctx.client, publisher, app)
+        } else if (ev.creationFlags.permissionlessExtension) {
+          await checkMirrors()
+        }
+      } catch (e) {
+        err(`watch: ${describeError(e)}`)
       }
     },
-    onError: (e) => err(`watch error: ${e.message}`),
+    onExpiryExtended: (ev) => {
+      const m = st.mirrors.find((x) => x.key === ev.entityKey)
+      if (m) say({ event: "lease", key: m.key, expiresAt: ev.expiresAt }, `${chip("LEASE", "info")} ${m.url} renewed until ${expiryText(ev.expiresAt, st.clock)}`)
+    },
+    onError: (e) => err(`watch error: ${describeError(e)}`),
   })
   await new Promise(() => {})
   return 0

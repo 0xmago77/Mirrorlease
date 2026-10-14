@@ -5,7 +5,7 @@ import { key as keyAttr, u64 } from "@arkiv-network/sdk/attr"
 import { tiramisu } from "@arkiv-network/sdk/chains"
 import { eq, gt } from "@arkiv-network/sdk/query"
 import { arkivHttp } from "./rpc"
-import { ARKIV_ADDRESS, HISTORY_MAX_PROBES, LOG_RANGE, HISTORY_STEP, KIND, type Kind, NAMESPACE_ATTR, NAMESPACE_VALUE, PAGE_SIZE, RPC_HTTP } from "./constants"
+import { ARKIV_ADDRESS, HISTORY_MAX_DEAD, HISTORY_MAX_PROBES, LOG_RANGE, HISTORY_STEP, KIND, type Kind, NAMESPACE_ATTR, NAMESPACE_VALUE, PAGE_SIZE, RPC_HTTP } from "./constants"
 import {
   type AppRecord,
   decodeAll,
@@ -178,7 +178,11 @@ export async function findExpiredRelease(
     const found: ReleaseRecord[] = []
     for (const signer of signersFor(trust)) {
       const history = await createdHistory(c, signer, sinceBlock, clock.currentBlock)
-      const dead = [...history].filter(([, exp]) => exp <= clock.currentBlock)
+      // Newest first, and capped: each one costs a query against the anonymous budget.
+      const dead = [...history]
+        .filter(([, exp]) => exp <= clock.currentBlock)
+        .sort((a, b) => (a[1] === b[1] ? 0 : a[1] > b[1] ? -1 : 1))
+        .slice(0, HISTORY_MAX_DEAD)
       for (let i = 0; i < dead.length; i += 6) {
         const res = await Promise.all(
           dead.slice(i, i + 6).map(async ([k, exp]) => {
