@@ -16,14 +16,14 @@
     "node": ">=20"
   },
   "scripts": {
-    "lifeboat": "tsx src/cli/main.ts",
+    "lifeboat": "tsx src/cli/bin.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build:cli": "node scripts/build-cli.mjs",
     "build:web": "vite build --config web/vite.config.ts",
     "dev:web": "vite --config web/vite.config.ts",
     "seed": "tsx scripts/seed-demo.ts",
-    "keeper": "tsx src/cli/main.ts keeper --once"
+    "keeper": "tsx src/cli/bin.ts keeper --once"
   },
   "devDependencies": {
     "@arkiv-network/sdk": "^0.8.1",

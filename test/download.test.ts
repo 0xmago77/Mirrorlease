@@ -14,7 +14,7 @@ const fakeFetch = (routes: Record<string, Uint8Array | number | "throw">) => asy
   const r = routes[url]
   if (r === undefined || r === "throw") throw new TypeError("fetch failed")
   if (typeof r === "number") return new Response("nope", { status: r })
-  return new Response(r)
+  return new Response(r as Uint8Array<ArrayBuffer>)
 }
 
 describe("downloadVerified", () => {

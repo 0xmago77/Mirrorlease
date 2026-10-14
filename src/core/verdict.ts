@@ -63,7 +63,7 @@ export function computeVerdict(input: VerdictInput): VerdictResult {
       ...(rel ? { release: rel.item, role: rel.role } : {}),
       untrusted,
       summary:
-        `Revoked by the ${roleOf(trust, rev.creator, rev.app)}: ${rev.reason || "no reason given"}` +
+        `Revoked by the ${roleOf(trust, rev.creator, rev.app)}: ${sentence(rev.reason || "no reason given")}` +
         (rev.replacedBySha256 ? ` Use the replacement ${rev.replacedBySha256.slice(0, 12)}… instead.` : ""),
     }
   }
@@ -114,6 +114,10 @@ export function computeVerdict(input: VerdictInput): VerdictResult {
         ? `Not published by ${trust.pinned}. ${untrusted.length} other address(es) claim this file; Lifeboat ignores them.`
         : `Nothing on Arkiv from ${trust.pinned} vouches for this file.`,
   }
+}
+
+function sentence(s: string): string {
+  return /[.!?]$/.test(s) ? s : `${s}.`
 }
 
 /** One line per verdict, for docs and UI legends. */

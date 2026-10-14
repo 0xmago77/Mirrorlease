@@ -4,6 +4,10 @@ export const CHAIN_ID = 7738577
 export const RPC_HTTP = "https://rpc.tiramisu.db-chain.testnet.arkiv.network"
 export const RPC_WS = "wss://rpc.tiramisu.db-chain.testnet.arkiv.network"
 export const EXPLORER = "https://tiramisu.explorer.arkiv.network"
+/** The address that emits entity events. Not exported by the SDK root, so repeated here. */
+export const ARKIV_ADDRESS = "0x4400000000000000000000000000000000000044" as const
+/** eth_getLogs on Tiramisu refuses ranges above 100000 blocks. */
+export const LOG_RANGE = 99_000n
 
 /** Every Lifeboat entity carries `lb = "1"` so our queries never match someone else's data. */
 export const NAMESPACE_ATTR = "lb"

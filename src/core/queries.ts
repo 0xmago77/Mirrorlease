@@ -1,11 +1,11 @@
 // Every Arkiv read Lifeboat makes. arkiv/schema.md quotes these; keep them in sync.
 
-import { createPublicClient, type Entity, type PublicArkivClient } from "@arkiv-network/sdk"
-import { u64 } from "@arkiv-network/sdk/attr"
+import { createPublicClient, ENTITY_EVENTS_ABI, type Entity, type PublicArkivClient } from "@arkiv-network/sdk"
+import { key as keyAttr, u64 } from "@arkiv-network/sdk/attr"
 import { tiramisu } from "@arkiv-network/sdk/chains"
 import { eq, gt } from "@arkiv-network/sdk/query"
-import { http } from "viem"
-import { HISTORY_MAX_PROBES, HISTORY_STEP, KIND, type Kind, NAMESPACE_ATTR, NAMESPACE_VALUE, PAGE_SIZE, RPC_HTTP } from "./constants"
+import { arkivHttp } from "./rpc"
+import { ARKIV_ADDRESS, HISTORY_MAX_PROBES, LOG_RANGE, HISTORY_STEP, KIND, type Kind, NAMESPACE_ATTR, NAMESPACE_VALUE, PAGE_SIZE, RPC_HTTP } from "./constants"
 import {
   type AppRecord,
   decodeAll,
@@ -20,7 +20,7 @@ import { buildTrust, roleOf, signersFor, type Trust } from "./trust"
 export type Client = PublicArkivClient
 
 export function makePublicClient(rpcUrl: string = RPC_HTTP): Client {
-  return createPublicClient({ chain: tiramisu, transport: http(rpcUrl) }) as Client
+  return createPublicClient({ chain: tiramisu, transport: arkivHttp(rpcUrl) }) as Client
 }
 
 /** Namespace + kind: the first two predicates of every query. */
@@ -128,11 +128,81 @@ export async function mirrorsByOperator(c: Client, operator: Hex): Promise<Mirro
 }
 
 /**
- * Looks for a release of this hash that has since expired, by reading the state at earlier blocks
- * (arkiv_query with atBlock). Probes every HISTORY_STEP back to `sinceBlock`, newest first, a few
- * at a time, and stops at the first hit. A support window shorter than HISTORY_STEP can be missed.
+ * Every entity a signer ever created, with its last known expiry, from EntityCreated and
+ * ExpiryExtended logs (both index the owner). Paged because eth_getLogs caps the block range.
+ */
+export async function createdHistory(c: Client, signer: Hex, fromBlock: bigint, toBlock: bigint) {
+  const expiry = new Map<Hex, bigint>()
+  const ranges: [bigint, bigint][] = []
+  for (let from = fromBlock; from <= toBlock; from += LOG_RANGE + 1n) {
+    ranges.push([from, from + LOG_RANGE > toBlock ? toBlock : from + LOG_RANGE])
+  }
+  for (let i = 0; i < ranges.length; i += 4) {
+    const chunk = await Promise.all(
+      ranges.slice(i, i + 4).map(async ([from, to]) => {
+        const [created, extended] = await Promise.all([
+          c.getLogs({ address: ARKIV_ADDRESS, event: ENTITY_EVENTS_ABI[0], args: { owner: signer }, fromBlock: from, toBlock: to }),
+          c.getLogs({ address: ARKIV_ADDRESS, event: ENTITY_EVENTS_ABI[2], args: { owner: signer }, fromBlock: from, toBlock: to }),
+        ])
+        return [...created, ...extended]
+      }),
+    )
+    for (const log of chunk.flat()) {
+      const k = log.args.entityKey as Hex | undefined
+      const at = log.args.expiresAt as bigint | undefined
+      if (!k || at === undefined) continue
+      const prev = expiry.get(k)
+      if (prev === undefined || at > prev) expiry.set(k, at)
+    }
+  }
+  return expiry
+}
+
+/**
+ * Finds a release of this hash that existed and has since expired (EOL).
+ *
+ * Expired entities no longer match a query at the head, so this reads history: the signer's
+ * EntityCreated / ExpiryExtended logs give every entity they made and when it expired, and an
+ * arkiv_query with atBlock = (expiry - 1) reads each dead one as it was on its last day. If the
+ * node refuses the logs, it falls back to probing the state every HISTORY_STEP.
  */
 export async function findExpiredRelease(
+  c: Client,
+  trust: Trust,
+  sha: string,
+  clock: Clock,
+  sinceBlock: bigint,
+  onProbe?: (block: bigint) => void,
+): Promise<ReleaseRecord[]> {
+  try {
+    const found: ReleaseRecord[] = []
+    for (const signer of signersFor(trust)) {
+      const history = await createdHistory(c, signer, sinceBlock, clock.currentBlock)
+      const dead = [...history].filter(([, exp]) => exp <= clock.currentBlock)
+      for (let i = 0; i < dead.length; i += 6) {
+        const res = await Promise.all(
+          dead.slice(i, i + 6).map(async ([k, exp]) => {
+            onProbe?.(exp - 1n)
+            const page = await c
+              .select("*")
+              .where(eq("$key", keyAttr(k)), ...base(KIND.release), eq("sha256", sha))
+              .atBlock(exp - 1n)
+              .limit(1)
+              .fetch()
+            return decodeAll(page.entities as unknown as Entity[], "release")
+          }),
+        )
+        found.push(...res.flat().filter((r) => roleOf(trust, r.creator, r.app)))
+      }
+    }
+    return found
+  } catch {
+    return probeHistory(c, trust, sha, clock, sinceBlock, onProbe)
+  }
+}
+
+/** Fallback: read the state every HISTORY_STEP back to `sinceBlock`. Misses very short windows. */
+async function probeHistory(
   c: Client,
   trust: Trust,
   sha: string,
@@ -143,13 +213,9 @@ export async function findExpiredRelease(
   const step = BigInt(Math.max(1, Math.floor(HISTORY_STEP / clock.blockDuration)))
   const blocks: bigint[] = []
   for (let b = clock.currentBlock - step; b > sinceBlock && blocks.length < HISTORY_MAX_PROBES; b -= step) blocks.push(b)
-  if (sinceBlock > 0n && sinceBlock < clock.currentBlock && blocks.length < HISTORY_MAX_PROBES) blocks.push(sinceBlock + 1n)
-
-  const batch = 6
-  for (let i = 0; i < blocks.length; i += batch) {
-    const slice = blocks.slice(i, i + batch)
+  for (let i = 0; i < blocks.length; i += 6) {
     const results = await Promise.all(
-      slice.map(async (b) => {
+      blocks.slice(i, i + 6).map(async (b) => {
         onProbe?.(b)
         try {
           return await releasesBySha(c, trust, sha, b)
