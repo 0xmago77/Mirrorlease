@@ -72,6 +72,7 @@ Readers (no key needed):
   lifeboat verify <file> --publisher <0x..> [--app id]  OK / TAMPERED / REVOKED / EOL / UNKNOWN_PUBLISHER
   lifeboat fetch <app> --publisher <0x..> [--out f]     download from the first mirror that serves
                  [--channel stable|beta] [--vouch]      the published bytes; --vouch renews its lease
+                 [--url <u>]                            also try this URL (last), still hash-checked
   lifeboat updates <app> --publisher <0x..> --since <versionCode>
   lifeboat watch <app> --publisher <0x..>               print revocations and new mirrors live (WebSocket)
 

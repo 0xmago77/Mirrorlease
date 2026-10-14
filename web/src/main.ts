@@ -279,7 +279,7 @@ function appView(appId: string, publisherParam: string) {
       seenRevocations.add(r.key)
       append(banners, h("div", { class: `banner bad${isNew ? " flash" : ""}` },
         h("strong", {}, `${isNew ? "Just revoked: " : "Revoked: "}${rel ? `${rel.versionName} ` : ""}(${r.sha256.slice(0, 12)}…). `),
-        r.reason || "No reason given.",
+        r.reason ? (/[.!?]$/.test(r.reason) ? r.reason : `${r.reason}.`) : "No reason given.",
         replacement ? ` Use ${replacement.versionName} instead.` : r.replacedBySha256 ? ` Replacement sha256 ${r.replacedBySha256.slice(0, 12)}….` : "",
         " ",
         keyLink(r.key, "revocation"),

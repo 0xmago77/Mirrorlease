@@ -136,7 +136,7 @@ dl.kv dd { margin: 0; min-width: 0; }
 
 .notes { white-space: pre-wrap; color: #c5cdd6; }
 
-table.list { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
+table.list { width: 100%; border-collapse: collapse; font-size: 0.92rem; display: block; overflow-x: auto; }
 table.list td { padding: 0.45rem 0.4rem; border-top: 1px solid var(--line); vertical-align: middle; }
 
 ul.mirrors { list-style: none; padding: 0; margin: 0; }
@@ -189,7 +189,9 @@ details.explain summary { cursor: pointer; color: var(--text); font-weight: 600;
   .hero h1 { font-size: 1.55rem; }
   ol.log li { grid-template-columns: 1fr; }
   ol.log .detail { grid-column: 1; }
-  table.list td:nth-child(5) { display: none; }
+  table.list td:nth-child(4), table.list td:nth-child(5) { display: none; }
+  table.list td { padding: 0.45rem 0.25rem; }
+  .chip { white-space: normal; }
   dl.kv { grid-template-columns: 1fr; }
   dl.kv dt { margin-top: 0.4rem; }
 }
