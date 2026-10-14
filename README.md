@@ -199,7 +199,28 @@ Publisher `0x8fb633d00b49d851dbff111b0d7c1eec8f9dcea2`, mirror operator
 `0xddce3253a9ce18459b9a7ad4b49e7f8aaa4f9776`. Created with `scripts/seed-demo.ts`, which drives the
 CLI and skips anything that already exists.
 
-DEMO_KEYS_PLACEHOLDER
+| entity | key | transaction | Entity Expiration |
+|---|---|---|---|
+| app `lifeboat-cli` | [0x552a5c68…](https://tiramisu.explorer.arkiv.network/entity/0x552a5c68bb43f0a0f39deb5cbd8c9d359f7b6576be879e3d185eccb102bfbf17) | [0x0bfbe0c7…](https://tiramisu.explorer.arkiv.network/tx/0x0bfbe0c7cd8b37b6494f36973e79ba1c6c82c7dff165669c6176b3abe6c7ca5d) | 180 days |
+| release 0.0.8 (beta) | [0x2e7a8427…](https://tiramisu.explorer.arkiv.network/entity/0x2e7a8427c3f241c8200dae8953f1796ad0060f7f951e1dacdb6c2efde0919e14) | [0x0cfe95b0…](https://tiramisu.explorer.arkiv.network/tx/0x0cfe95b0a94170756caeabfe8b4e1aa6d2b00312465f6195140052f66721df09) | 1 day: end-of-life from 2026-10-15 20:25 UTC |
+| release 0.0.9 (stable) | [0x5bdc13e7…](https://tiramisu.explorer.arkiv.network/entity/0x5bdc13e7747ac1d5a9b322f4c2b500ec45f2a07e3ad989000344147cb1bec80b) | [0x20f67927…](https://tiramisu.explorer.arkiv.network/tx/0x20f67927be63003cd90906cf6a817b147225f59a944a8c46e8eba7add4b8ef36) | 60 days, revoked |
+| revocation of 0.0.9 | [0xa6f223f3…](https://tiramisu.explorer.arkiv.network/entity/0xa6f223f3c029157ab1c798c013ea3266007d617f6865643e412b1ec87d6aaf7f) | [0x05de3541…](https://tiramisu.explorer.arkiv.network/tx/0x05de3541259f773698902287f92fec2b22b810c94089a8bcf7db5a1a21c57c66) | 365 days |
+| release 0.1.0 (stable), same batch | [0x405bdb22…](https://tiramisu.explorer.arkiv.network/entity/0x405bdb22cf5c96027d07ecc081882c624198a64086eeb3877944a6876353dd44) | [0x05de3541…](https://tiramisu.explorer.arkiv.network/tx/0x05de3541259f773698902287f92fec2b22b810c94089a8bcf7db5a1a21c57c66) | 60 days |
+
+Files (`web/public/dist`): `lifeboat-cli-0.1.0.tgz` sha256 `f9d7faac274bf3e3c24f43f6692435b2f7c2ac73d28bd2c3b8337b9549de6a43`,
+`lifeboat-cli-0.0.9.tgz` `a975ad6318733c5111bc0eb60ca509360b51930280dfd162844c324b87c54880`,
+`lifeboat-cli-0.0.8.tgz` `826c088d2c56b6b565e5a1ce5576023e81fcba2352d0f43037944e5d1f77445c`, and the poisoned
+copy `tampered/lifeboat-cli-0.1.0.tgz` `d09c6da860aedfef5e9ebc53571848a5ad9942736254cb2fccb5aa08a8da616d`.
+
+Mirrors for 0.1.0, registered by the mirror operator after the repository is public (the real ones are
+downloaded and checked before registration): GitHub Pages, jsDelivr and raw.githubusercontent copies of
+the tarball, a dead "official" host (`downloads.lifeboat-demo.invalid`) and the poisoned copy. The last two
+are registered with `--skip-check`, which exists only for this demo.
+
+The app `lb-selftest` holds the end-to-end tests run while building: a handoff to a maintainer, releases
+by both, two revocations (one by the maintainer, sent while a browser had the page open), and mirrors on
+jsDelivr and unpkg. Its entities expire within a few days.
+
 
 ## Development
 

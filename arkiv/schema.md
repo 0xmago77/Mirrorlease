@@ -66,10 +66,10 @@ the entity expires, queries at the head stop returning it, and the build is end-
 see "no longer vouched for by the publisher" instead of silently installing it.
 
 How EOL is detected after the entity is gone: the verifier reads the publisher's `EntityCreated` and
-`ExpiryExtended` logs (both index `owner`) to list every entity they made and when it expired, then
-runs the release query with `atBlock = expiresAt - 1` against each one that is dead now. That reads
-the release as it was on its last day, so the answer can say which version it was and when support
-ended. Code: `findExpiredRelease` in `src/core/queries.ts`.
+`ExpiryExtended` logs (both index `owner`) to list every entity they made, when it was created and
+when it expired, then runs the release-by-hash query with `atBlock` at a few blocks chosen so that
+every now-dead entity was alive at one of them. That reads the release as it was before it expired,
+so the answer can say which version it was and when support ended. Code: `findExpiredRelease` in `src/core/queries.ts`.
 
 ## 3. revocation
 
@@ -128,21 +128,48 @@ it last; it would still be rejected by the hash check.
 
 ## Queries
 
-Every query starts with `lb = "1" AND kind = ...`. The SDK renders the builder below into the query
-text shown; that text is exactly what goes to `arkiv_query`. Results come newest first, at most 200
-per page, with a cursor for the next page; there is no ORDER BY, so sorting is done on the client.
+The public Tiramisu RPC bills every `arkiv_query` a flat 100 units against an anonymous budget of
+10000 units per window, whatever the query selects or returns; `arkiv_getBlockTiming` and
+`eth_getLogs` are not billed (measured from the `Arkiv-Cost` header, see `arkiv/friction.md`). So
+each view is built from as few queries as possible: one OR query fetches several kinds at once, and
+the client filters by kind, trust and hash, and sorts (there is no ORDER BY; results come newest
+first, at most 200 per page, with a cursor). Builders live in `Q` in `src/core/queries.ts`; the
+rendered text below is exactly what goes to `arkiv_query`.
 
-Releases of an app by the pinned publisher, sorted by `version` descending on the client:
+App page and `lifeboat status` / `fetch`: one query returns the app entity, the publisher's
+releases and revocations for the app, and every mirror registered for the app (any operator):
 
 ```ts
-client.select("*")
-  .where(eq("lb", "1"), eq("kind", "release"), eq("app", app))
-  .createdBy(publisher)
-  .limit(200).fetch()
-// lb = str('1') AND kind = str('release') AND app = str('lifeboat-cli') AND $creator = addr(0x8fB6...CeA2)
+client.select("*").where(
+  eq("lb", "1"), eq("app", app),
+  or(eq("$creator", addr(publisher)), eq("kind", "mirror")),
+)
+// lb = str('1') AND app = str('lifeboat-cli') AND ($creator = addr(0x8fB6...CeA2) OR kind = str('mirror'))
 ```
 
-Updates newer than what the user has (range query on `version`):
+The client keeps releases and revocations whose creator is trusted, sorts releases by `version`
+descending, picks the newest unrevoked stable release, and sorts that release's mirrors by
+`$expiresAt` descending (freshest lease first). If the app entity's `$owner` is not the publisher
+(a handoff), one more query reads what the maintainer created for this app:
+
+```ts
+client.select("*").where(eq("lb", "1"), eq("app", app)).createdBy(maintainer)
+```
+
+Check a file and `lifeboat verify`: one query returns anything that mentions the hash (releases,
+revocations, mirrors, by anyone) and everything the publisher created (its app entities, so
+handoffs are visible, and its releases, so a same-named file with other bytes is TAMPERED):
+
+```ts
+client.select("*").where(eq("lb", "1"), or(eq("sha256", sha), eq("$creator", addr(publisher))))
+// lb = str('1') AND (sha256 = str('...') OR $creator = addr(0x8fB6...CeA2))
+```
+
+Releases by unpinned addresses that match the hash are shown as "also claimed by", never trusted.
+After a handoff the same query runs once more with the maintainer's address.
+
+Updates newer than what the user has (range query on the `u64` attribute; the literal must be
+`u64` too, see friction item 7):
 
 ```ts
 client.select("*")
@@ -151,46 +178,28 @@ client.select("*")
 // ... AND version > u64(9) AND $creator = addr(...)
 ```
 
-Verify a file: is it published, and is it revoked?
-
-```ts
-client.select("*").where(eq("lb", "1"), eq("kind", "release"), eq("sha256", sha)).createdBy(publisher)
-client.select("*").where(eq("lb", "1"), eq("kind", "revocation"), eq("sha256", sha)).createdBy(publisher)
-```
-
-Revocations for an app (for the banner on the app page):
-
-```ts
-client.select("*").where(eq("lb", "1"), eq("kind", "revocation"), eq("app", app)).createdBy(publisher)
-```
-
-Mirrors for a release, any operator, sorted by `$expiresAt` descending (freshest lease first) on the
-client:
-
-```ts
-client.select("*").where(eq("lb", "1"), eq("kind", "mirror"), eq("sha256", sha))
-```
-
-A keeper's own mirrors:
+Mirror operator: `mirror add` reads everything about the hash (`lb = 1 AND sha256 = H`) to learn the
+app id and size and to skip a URL it already registered; the keeper lists its own mirrors:
 
 ```ts
 client.select("*").where(eq("lb", "1"), eq("kind", "mirror")).createdBy(operator)
 ```
 
-The app entity, for founder (`$creator`) and maintainer (`$owner`):
+Publisher commands check what they already own before writing, so reruns do not duplicate:
 
 ```ts
-client.select("*").where(eq("lb", "1"), eq("kind", "app"), eq("app", app)).createdBy(publisher)
+client.select("*").where(eq("lb", "1"), or(eq("sha256", revoked), eq("sha256", replacement))).ownedBy(me)
 ```
 
-After a handoff, the release, revocation and "verify" queries run once more with
-`.createdBy(maintainer)`, and the results are labelled.
-
-History, for EOL (see the release section):
+History, for EOL (see the release section). The logs are free; each `atBlock` read costs one query.
+To keep that small, the client computes the fewest blocks at which every now-dead entity of the
+publisher was alive (greedy interval stabbing over `[created, expiresAt - 1]`) and reads only
+those, newest first, stopping at the first hit:
 
 ```ts
 client.getLogs({ address: "0x4400000000000000000000000000000000000044", event: EntityCreated, args: { owner: publisher }, fromBlock, toBlock })
-client.select("*").where(eq("$key", key(k)), eq("lb", "1"), eq("kind", "release"), eq("sha256", sha)).atBlock(expiresAt - 1n)
+client.getLogs({ address: "0x4400000000000000000000000000000000000044", event: ExpiryExtended, args: { owner: publisher }, fromBlock, toBlock })
+client.select("*").where(eq("lb", "1"), eq("kind", "release"), eq("sha256", sha)).createdBy(publisher).atBlock(block)
 ```
 
 `eth_getLogs` on Tiramisu accepts at most 100000 blocks per call, so the range is paged.

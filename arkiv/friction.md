@@ -57,7 +57,32 @@ What we did: `src/core/rpc.ts` wraps `fetch`, records `Arkiv-Cost` and `RateLimi
 We also cut the queries per view (see "Measured costs" below) and made the live view filter
 WebSocket events before fetching anything.
 
-MEASURED_COSTS_PLACEHOLDER
+### Measured costs
+
+Measured on 2026-10-14 from the `Arkiv-Cost` and `RateLimit` response headers:
+
+| call | Arkiv-Cost | notes |
+|---|---|---|
+| `arkiv_query`, full selection, limit 200, 4 results | 100 | |
+| `arkiv_query`, key only, 0 results | 100 | cost does not depend on selection or result size |
+| `arkiv_query` with a nested `OR` | 100 | so one OR query is far cheaper than several simple ones |
+| `arkiv_getBlockTiming`, `eth_getLogs`, `eth_blockNumber` | none | only a request-rate limit: `ratelimit: limit=600` per ~60 s window |
+
+The cost budget itself is invisible while it lasts: successful responses carry only the request-rate
+`RateLimit` (limit=600), `Arkiv-Quota-Used-Percent` was never sent to us, and `limit=10000` only
+appears in the 429. The budget was exhausted around 19:45 UTC and came back at 20:21 UTC.
+
+At 100 units a query, the anonymous budget is 100 queries per window. Our first version of the app
+page made about 6 queries per load (app entity, releases and revocations per signer, mirrors), and
+verifying an unknown file made one more query per expired entity; a dozen page loads and a few
+history lookups emptied the budget. After restructuring around single OR queries:
+
+| view | before | after |
+|---|---|---|
+| app page / `lifeboat status` | 600 | 100 (200 after a maintainer handoff) |
+| check a file, published and live | 500 | 100 |
+| check a file that has expired (EOL) | 500 + 100 per expired entity of the publisher | 100 + 100 per history block actually read (1 in our tests) |
+
 
 ## 2. `exists()` is exported and documented, but the node rejects it with an unrelated message
 
@@ -208,4 +233,18 @@ Each of these was exercised on Tiramisu by the CLI in this repository; transacti
 
 Gas price on Tiramisu was about 1 gwei throughout, so costs below are in GLM at that price.
 
-GAS_PLACEHOLDER
+| operation | runs | gas used (each) | GLM (each) |
+|---|---|---|---|
+| app create | 2 | 96072–98616 | 0.000099 |
+| publish beta | 4 | 116136–117912 | 0.000118 |
+| revoke + replacement (batch) | 2 | 228280–230280 | 0.000230 |
+| support (lifetime extension) | 1 | 25240 | 0.000025 |
+| mirror add | 2 | 106232–111680 | 0.000112 |
+| mirror add (skip-check) | 1 | 106552 | 0.000107 |
+| vouch (permissionless lease extension) | 1 | 25210 | 0.000025 |
+| keeper renew lease | 2 | 25210 | 0.000025 |
+| app handoff | 1 | 25430 | 0.000025 |
+| publish stable | 1 | 116680 | 0.000117 |
+
+Total for the 17 logged transactions while building and seeding the demo: 0.001687 GLM. (Two more, a maintainer publish and a maintainer revoke during the browser test, ran without the gas log.)
+
