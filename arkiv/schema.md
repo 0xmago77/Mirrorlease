@@ -226,11 +226,11 @@ Publisher `0x8fb633d00b49d851dbff111b0d7c1eec8f9dcea2`, app `mirrorlease-cli`, n
 | release 0.0.9 | `0x9edb043b6fa4a958b378a89fdcc81990e7f2c052a2fed0fcb191f0011b30c5cc` |
 | revocation of 0.0.9 | `0x4d11efce1525c49c5fa63192b06b16f1da6a67a011130baadc07d0fddb45af5d` |
 | release 0.1.0 | `0xe28de0e6f2945e8fa47e73fa17547b36d00ff830a71d8e50939d1c1f2a68b35b` |
-| mirror: GitHub Pages | TBD after push (mirror 1) |
-| mirror: jsDelivr | TBD after push (mirror 2) |
-| mirror: raw.githubusercontent | TBD after push (mirror 3) |
-| mirror: dead host, demo | TBD after push (mirror 4) |
-| mirror: poisoned copy, demo | TBD after push (mirror 5) |
+| mirror: GitHub Pages | [0x046ad4a4…](https://tiramisu.explorer.arkiv.network/entity/0x046ad4a477359575ffad725b532d5655c92ad45475c8989cc74d20cd35c92b0b) |
+| mirror: jsDelivr | [0x78bf29fa…](https://tiramisu.explorer.arkiv.network/entity/0x78bf29fa2df026588087c48c8ec8b99d4eb05344fd657805b045c5c6305be2c4) |
+| mirror: raw.githubusercontent | [0xea58d962…](https://tiramisu.explorer.arkiv.network/entity/0xea58d962f0d846f07c3fc15f276f135fc1224ffafd23c9ff31e43c6fd7d2e3ab) |
+| mirror: dead host, demo | [0x272bab6b…](https://tiramisu.explorer.arkiv.network/entity/0x272bab6ba5442b7b23273e53e1a5d83751246e35b949831773ea523c56070078) (first lease; re-registered later) |
+| mirror: poisoned copy, demo | [0x4241e254…](https://tiramisu.explorer.arkiv.network/entity/0x4241e25467aa21d58927a66f806ecde776cb8ec9c972bf029349d7c943238714) (first lease; re-registered later) |
 
 ## What stays off Arkiv
 
