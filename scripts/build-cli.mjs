@@ -1,10 +1,10 @@
-// Bundles the CLI and its dependencies into one file, dist/lifeboat.mjs, so the npm tarball has no
-// runtime dependencies and installs offline: `npm i -g ./lifeboat-cli-0.1.0.tgz`.
+// Bundles the CLI and its dependencies into one file, dist/mirrorlease.mjs, so the npm tarball has no
+// runtime dependencies and installs offline: `npm i -g ./mirrorlease-cli-0.1.0.tgz`.
 import { build } from "esbuild"
 
 await build({
   entryPoints: ["src/cli/bin.ts"],
-  outfile: "dist/lifeboat.mjs",
+  outfile: "dist/mirrorlease.mjs",
   bundle: true,
   platform: "node",
   format: "esm",

@@ -1,5 +1,5 @@
 // Trust pinning. The user brings one address (from the project's README, a signed tag, a QR code)
-// and Lifeboat only believes entities whose immutable $creator is that address, or the current
+// and Mirrorlease only believes entities whose immutable $creator is that address, or the current
 // $owner of an app entity that address created (a maintainer handoff). No writable field such as an
 // attribute or payload is ever used to decide who is trusted.
 

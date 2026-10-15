@@ -7,7 +7,7 @@ process.emitWarning = ((warning: string | Error, ...rest: unknown[]) => {
   return (emit as (...a: unknown[]) => void)(warning, ...rest)
 }) as typeof process.emitWarning
 
-// "lifeboat status ... | head" closes the pipe early; that is not an error worth a stack trace.
+// "mirrorlease status ... | head" closes the pipe early; that is not an error worth a stack trace.
 process.stdout.on("error", (e: NodeJS.ErrnoException) => {
   if (e.code === "EPIPE") process.exit(0)
   throw e

@@ -3,33 +3,33 @@
 //
 //   node scripts/pack-cli.mjs 0.1.0 web/public/dist
 //
-// The bundle in dist/lifeboat.mjs must be built first (npm run build:cli).
+// The bundle in dist/mirrorlease.mjs must be built first (npm run build:cli).
 import { execFileSync } from "node:child_process"
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 
 const [version = "0.1.0", dest = "web/public/dist"] = process.argv.slice(2)
-const stage = resolve(".pack", `lifeboat-cli-${version}`)
+const stage = resolve(".pack", `mirrorlease-cli-${version}`)
 rmSync(stage, { recursive: true, force: true })
 mkdirSync(join(stage, "dist"), { recursive: true })
 
-const bundle = readFileSync("dist/lifeboat.mjs", "utf8").replace(/const VERSION = "[^"]+"/, `const VERSION = "${version}"`)
-writeFileSync(join(stage, "dist", "lifeboat.mjs"), bundle, { mode: 0o755 })
+const bundle = readFileSync("dist/mirrorlease.mjs", "utf8").replace(/const VERSION = "[^"]+"/, `const VERSION = "${version}"`)
+writeFileSync(join(stage, "dist", "mirrorlease.mjs"), bundle, { mode: 0o755 })
 copyFileSync("cli/README.md", join(stage, "README.md"))
 copyFileSync("LICENSE", join(stage, "LICENSE"))
 writeFileSync(
   join(stage, "package.json"),
   `${JSON.stringify(
     {
-      name: "lifeboat-cli",
+      name: "mirrorlease-cli",
       version,
       description: "Verify and fetch software releases whose hashes, revocations and mirrors live on Arkiv.",
       license: "MIT",
       type: "module",
-      bin: { lifeboat: "dist/lifeboat.mjs" },
-      files: ["dist/lifeboat.mjs"],
+      bin: { mirrorlease: "dist/mirrorlease.mjs" },
+      files: ["dist/mirrorlease.mjs"],
       engines: { node: ">=22" },
-      repository: { type: "git", url: "https://github.com/0xmago77/lifeboat" },
+      repository: { type: "git", url: "https://github.com/0xmago77/Mirrorlease" },
     },
     null,
     2,

@@ -1,4 +1,4 @@
-# Lifeboat on Arkiv: schema and queries
+# Mirrorlease on Arkiv: schema and queries
 
 Network: Tiramisu testnet, chain id 7738577, RPC `https://rpc.tiramisu.db-chain.testnet.arkiv.network`
 (WebSocket on the same host with `wss://`). SDK: `@arkiv-network/sdk` 0.8.1 with viem 2.57.
@@ -8,7 +8,7 @@ The code that writes these entities is `src/core/schema.ts`; the code that reads
 
 ## Rules that apply to every entity
 
-- Every entity carries `lb = "1"` (string). It is a namespace, so our queries never match someone
+- Every entity carries `ml = "1"` (string). It is a namespace, so our queries never match someone
   else's data, and a version marker if the schema ever changes.
 - `kind` (string) is one of `app`, `release`, `revocation`, `mirror`.
 - `app` (string) is the app id, lowercase `[a-z0-9._-]`, up to 64 characters.
@@ -17,9 +17,9 @@ The code that writes these entities is `src/core/schema.ts`; the code that reads
 - Numbers that are compared with `<`/`>` are `u64` attributes, written with `u64(...)` from
   `@arkiv-network/sdk/attr`. A bare JS number would be stored as `i32`, and a range query has to use
   the same type as the stored value.
-- Who wrote an entity is decided by `$creator`, which the chain sets and nobody can change. Lifeboat
+- Who wrote an entity is decided by `$creator`, which the chain sets and nobody can change. Mirrorlease
   never trusts a writable attribute or payload field to say who published something.
-- Everything read back is treated as untrusted input. Anyone can write an entity with `lb = "1"`;
+- Everything read back is treated as untrusted input. Anyone can write an entity with `ml = "1"`;
   malformed ones are dropped by the decoder, and ones from unpinned addresses are ignored by the
   trust rules below.
 
@@ -29,16 +29,16 @@ Created by the publisher (the founder). One per app id.
 
 | attribute | type | value |
 |---|---|---|
-| `lb` | str | `"1"` |
+| `ml` | str | `"1"` |
 | `kind` | str | `"app"` |
-| `app` | str | app id, e.g. `lifeboat-cli` |
+| `app` | str | app id, e.g. `mirrorlease-cli` |
 
 Payload: `{ "name": string, "description": string, "homepage": string }`
 
 Entity Expiration: 180 days. The app entity is the anchor for handoff, so it lives longer than any
 release; the publisher renews it with a Lifetime Extension while the project is alive.
 
-Ownership: `$creator` is the founder forever. `changeOwnership` (`lifeboat app handoff <addr>`)
+Ownership: `$creator` is the founder forever. `changeOwnership` (`mirrorlease app handoff <addr>`)
 moves `$owner` to a new maintainer. Verifiers that pin the founder then also accept releases and
 revocations created by the app entity's current `$owner`, for that app only, and label them
 "maintainer". An app entity created by anyone other than the pinned address is ignored, even if it
@@ -50,7 +50,7 @@ Created by the publisher or the current maintainer. One per build.
 
 | attribute | type | value |
 |---|---|---|
-| `lb` | str | `"1"` |
+| `ml` | str | `"1"` |
 | `kind` | str | `"release"` |
 | `app` | str | app id |
 | `version` | u64 | version code, monotonic. `1.2.3` becomes `10203` unless `--code` is given |
@@ -58,10 +58,10 @@ Created by the publisher or the current maintainer. One per build.
 | `size` | u64 | file size in bytes |
 | `channel` | str | `"stable"` or `"beta"` |
 
-Payload: `{ "versionName": "0.1.0", "fileName": "lifeboat-cli-0.1.0.tgz", "notes": string }`
+Payload: `{ "versionName": "0.1.0", "fileName": "mirrorlease-cli-0.1.0.tgz", "notes": string }`
 
 Entity Expiration: the support window. Stable 60 days, beta 7 days, or `--days n`.
-`lifeboat support <sha256> --days n` is a Lifetime Extension of that window. When the window ends
+`mirrorlease support <sha256> --days n` is a Lifetime Extension of that window. When the window ends
 the entity expires, queries at the head stop returning it, and the build is end-of-life (EOL): users
 see "no longer vouched for by the publisher" instead of silently installing it.
 
@@ -77,7 +77,7 @@ Created by the publisher or the current maintainer.
 
 | attribute | type | value |
 |---|---|---|
-| `lb` | str | `"1"` |
+| `ml` | str | `"1"` |
 | `kind` | str | `"revocation"` |
 | `app` | str | app id |
 | `sha256` | str | sha256 of the revoked file |
@@ -89,7 +89,7 @@ Payload: `{ "reason": string, "replacedBySha256"?: string }`
 Entity Expiration: 365 days, longer than any support window, so a revocation outlives the release
 it revokes. A revoked file stays REVOKED even after its release entity expired.
 
-`lifeboat revoke <sha> --replacement <file> --version x.y.z` writes the revocation and the
+`mirrorlease revoke <sha> --replacement <file> --version x.y.z` writes the revocation and the
 replacement release in one `executeBatch` transaction. Both land or neither does, so there is never
 a moment where users are told "revoked" with nothing to upgrade to, or see the new release without
 the warning about the old one.
@@ -101,7 +101,7 @@ the publisher's release before the user gets it.
 
 | attribute | type | value |
 |---|---|---|
-| `lb` | str | `"1"` |
+| `ml` | str | `"1"` |
 | `kind` | str | `"mirror"` |
 | `app` | str | app id |
 | `sha256` | str | sha256 of the file this URL is supposed to serve |
@@ -112,10 +112,10 @@ Payload: `{ "url": "https://...", "note": string }`
 
 Creation flags: `permissionlessExtension: true`.
 
-Entity Expiration: a 6 hour lease. The operator's keeper (`lifeboat keeper --once`, every 2 hours
+Entity Expiration: a 6 hour lease. The operator's keeper (`mirrorlease keeper --once`, every 2 hours
 from a systemd timer) downloads each of its mirrors, hashes it, and extends the lease to 6 hours
 from now only if the bytes match. Because of the creation flag, any user whose client just
-downloaded and verified the file may extend it too (`lifeboat fetch --vouch`), so a mirror that
+downloaded and verified the file may extend it too (`mirrorlease fetch --vouch`), so a mirror that
 people actually use stays listed even if its operator disappears. A mirror that stops serving the
 right bytes is simply not renewed and lapses within 6 hours.
 
@@ -136,15 +136,15 @@ the client filters by kind, trust and hash, and sorts (there is no ORDER BY; res
 first, at most 200 per page, with a cursor). Builders live in `Q` in `src/core/queries.ts`; the
 rendered text below is exactly what goes to `arkiv_query`.
 
-App page and `lifeboat status` / `fetch`: one query returns the app entity, the publisher's
+App page and `mirrorlease status` / `fetch`: one query returns the app entity, the publisher's
 releases and revocations for the app, and every mirror registered for the app (any operator):
 
 ```ts
 client.select("*").where(
-  eq("lb", "1"), eq("app", app),
+  eq("ml", "1"), eq("app", app),
   or(eq("$creator", addr(publisher)), eq("kind", "mirror")),
 )
-// lb = str('1') AND app = str('lifeboat-cli') AND ($creator = addr(0x8fB6...CeA2) OR kind = str('mirror'))
+// ml = str('1') AND app = str('mirrorlease-cli') AND ($creator = addr(0x8fB6...CeA2) OR kind = str('mirror'))
 ```
 
 The client keeps releases and revocations whose creator is trusted, sorts releases by `version`
@@ -153,16 +153,16 @@ descending, picks the newest unrevoked stable release, and sorts that release's 
 (a handoff), one more query reads what the maintainer created for this app:
 
 ```ts
-client.select("*").where(eq("lb", "1"), eq("app", app)).createdBy(maintainer)
+client.select("*").where(eq("ml", "1"), eq("app", app)).createdBy(maintainer)
 ```
 
-Check a file and `lifeboat verify`: one query returns anything that mentions the hash (releases,
+Check a file and `mirrorlease verify`: one query returns anything that mentions the hash (releases,
 revocations, mirrors, by anyone) and everything the publisher created (its app entities, so
 handoffs are visible, and its releases, so a same-named file with other bytes is TAMPERED):
 
 ```ts
-client.select("*").where(eq("lb", "1"), or(eq("sha256", sha), eq("$creator", addr(publisher))))
-// lb = str('1') AND (sha256 = str('...') OR $creator = addr(0x8fB6...CeA2))
+client.select("*").where(eq("ml", "1"), or(eq("sha256", sha), eq("$creator", addr(publisher))))
+// ml = str('1') AND (sha256 = str('...') OR $creator = addr(0x8fB6...CeA2))
 ```
 
 Releases by unpinned addresses that match the hash are shown as "also claimed by", never trusted.
@@ -173,22 +173,22 @@ Updates newer than what the user has (range query on the `u64` attribute; the li
 
 ```ts
 client.select("*")
-  .where(eq("lb", "1"), eq("kind", "release"), eq("app", app), gt("version", u64(BigInt(current))))
+  .where(eq("ml", "1"), eq("kind", "release"), eq("app", app), gt("version", u64(BigInt(current))))
   .createdBy(publisher)
 // ... AND version > u64(9) AND $creator = addr(...)
 ```
 
-Mirror operator: `mirror add` reads everything about the hash (`lb = 1 AND sha256 = H`) to learn the
+Mirror operator: `mirror add` reads everything about the hash (`ml = 1 AND sha256 = H`) to learn the
 app id and size and to skip a URL it already registered; the keeper lists its own mirrors:
 
 ```ts
-client.select("*").where(eq("lb", "1"), eq("kind", "mirror")).createdBy(operator)
+client.select("*").where(eq("ml", "1"), eq("kind", "mirror")).createdBy(operator)
 ```
 
 Publisher commands check what they already own before writing, so reruns do not duplicate:
 
 ```ts
-client.select("*").where(eq("lb", "1"), or(eq("sha256", revoked), eq("sha256", replacement))).ownedBy(me)
+client.select("*").where(eq("ml", "1"), or(eq("sha256", revoked), eq("sha256", replacement))).ownedBy(me)
 ```
 
 History, for EOL (see the release section). The logs are free; each `atBlock` read costs one query.
@@ -199,7 +199,7 @@ those, newest first, stopping at the first hit:
 ```ts
 client.getLogs({ address: "0x4400000000000000000000000000000000000044", event: EntityCreated, args: { owner: publisher }, fromBlock, toBlock })
 client.getLogs({ address: "0x4400000000000000000000000000000000000044", event: ExpiryExtended, args: { owner: publisher }, fromBlock, toBlock })
-client.select("*").where(eq("lb", "1"), eq("kind", "release"), eq("sha256", sha)).createdBy(publisher).atBlock(block)
+client.select("*").where(eq("ml", "1"), eq("kind", "release"), eq("sha256", sha)).createdBy(publisher).atBlock(block)
 ```
 
 `eth_getLogs` on Tiramisu accepts at most 100000 blocks per call, so the range is paged.
@@ -215,10 +215,27 @@ does not fetch every new entity on the chain:
 - `ExpiryExtended` for a mirror or release on screen: the event carries the new expiry, so the lease
   countdown updates with no query at all.
 
+## Demo entity keys
+
+Publisher `0x8fb633d00b49d851dbff111b0d7c1eec8f9dcea2`, app `mirrorlease-cli`, namespace `ml = "1"`:
+
+| entity | key |
+|---|---|
+| app | `0x368f733a056f4036fc155fd23b1e23bd3bf3db52106a5c8218ddca9149cbea4d` |
+| release 0.0.8 (beta) | `0xcb353b4ba2be3c8249a30cabbd1057d422e2a6999d0627e84a243fa6d2040f5e` |
+| release 0.0.9 | `0x9edb043b6fa4a958b378a89fdcc81990e7f2c052a2fed0fcb191f0011b30c5cc` |
+| revocation of 0.0.9 | `0x4d11efce1525c49c5fa63192b06b16f1da6a67a011130baadc07d0fddb45af5d` |
+| release 0.1.0 | `0xe28de0e6f2945e8fa47e73fa17547b36d00ff830a71d8e50939d1c1f2a68b35b` |
+| mirror: GitHub Pages | TBD after push (mirror 1) |
+| mirror: jsDelivr | TBD after push (mirror 2) |
+| mirror: raw.githubusercontent | TBD after push (mirror 3) |
+| mirror: dead host, demo | TBD after push (mirror 4) |
+| mirror: poisoned copy, demo | TBD after push (mirror 5) |
+
 ## What stays off Arkiv
 
 - The files themselves. Payloads are capped at 128 KB and a release can be hundreds of MB; Arkiv
   holds the hash, the size and where to find copies, and the mirrors hold the bytes.
-- Private keys. They are read from `LIFEBOAT_KEY_FILE` or `LIFEBOAT_PRIVATE_KEY` and never written
+- Private keys. They are read from `MIRRORLEASE_KEY_FILE` or `MIRRORLEASE_PRIVATE_KEY` and never written
   anywhere.
 - Download logs and who downloaded what. A vouch extends a lease; it does not record the user.

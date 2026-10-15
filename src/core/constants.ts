@@ -9,8 +9,8 @@ export const ARKIV_ADDRESS = "0x4400000000000000000000000000000000000044" as con
 /** eth_getLogs on Tiramisu refuses ranges above 100000 blocks. */
 export const LOG_RANGE = 99_000n
 
-/** Every Lifeboat entity carries `lb = "1"` so our queries never match someone else's data. */
-export const NAMESPACE_ATTR = "lb"
+/** Every Mirrorlease entity carries `ml = "1"` so our queries never match someone else's data. */
+export const NAMESPACE_ATTR = "ml"
 export const NAMESPACE_VALUE = "1"
 
 export const KIND = {

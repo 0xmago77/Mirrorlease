@@ -111,7 +111,7 @@ export function computeVerdict(input: VerdictInput): VerdictResult {
     untrusted,
     summary:
       untrusted.length > 0
-        ? `Not published by ${trust.pinned}. ${untrusted.length} other address(es) claim this file; Lifeboat ignores them.`
+        ? `Not published by ${trust.pinned}. ${untrusted.length} other address(es) claim this file; Mirrorlease ignores them.`
         : `Nothing on Arkiv from ${trust.pinned} vouches for this file.`,
   }
 }

@@ -1,14 +1,14 @@
 {
-  "name": "lifeboat-cli",
+  "name": "mirrorlease-cli",
   "version": "0.1.0",
   "description": "Keep software downloads working and verifiable when the project's site is blocked, taken down or hacked. Release manifests and mirrors live on Arkiv.",
   "license": "MIT",
   "type": "module",
   "bin": {
-    "lifeboat": "dist/lifeboat.mjs"
+    "mirrorlease": "dist/mirrorlease.mjs"
   },
   "files": [
-    "dist/lifeboat.mjs",
+    "dist/mirrorlease.mjs",
     "README.md",
     "LICENSE"
   ],
@@ -16,7 +16,7 @@
     "node": ">=22"
   },
   "scripts": {
-    "lifeboat": "tsx src/cli/bin.ts",
+    "mirrorlease": "tsx src/cli/bin.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "build:cli": "node scripts/build-cli.mjs",

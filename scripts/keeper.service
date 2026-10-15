@@ -1,17 +1,17 @@
-# Lifeboat mirror keeper: re-downloads every mirror this wallet registered, hashes it, and renews the
+# Mirrorlease mirror keeper: re-downloads every mirror this wallet registered, hashes it, and renews the
 # 6 hour lease only when the bytes still match. Template: scripts/install-keeper.sh fills in
-# {{LIFEBOAT_DIR}}, {{NODE_BIN_DIR}} and {{KEY_FILE}} and copies it to ~/.config/systemd/user/.
+# {{MIRRORLEASE_DIR}}, {{NODE_BIN_DIR}} and {{KEY_FILE}} and copies it to ~/.config/systemd/user/.
 [Unit]
-Description=Lifeboat mirror keeper
+Description=Mirrorlease mirror keeper
 Wants=network-online.target
 After=network-online.target
 
 [Service]
 Type=oneshot
-WorkingDirectory={{LIFEBOAT_DIR}}
+WorkingDirectory={{MIRRORLEASE_DIR}}
 Environment=PATH={{NODE_BIN_DIR}}:/usr/local/bin:/usr/bin:/bin
-Environment=LIFEBOAT_KEY_FILE={{KEY_FILE}}
-ExecStart={{LIFEBOAT_DIR}}/node_modules/.bin/tsx src/cli/bin.ts keeper --once
+Environment=MIRRORLEASE_KEY_FILE={{KEY_FILE}}
+ExecStart={{MIRRORLEASE_DIR}}/node_modules/.bin/tsx src/cli/bin.ts keeper --once
 # Demo only: re-register the dead and poisoned demo entries after the keeper let them lapse, so the
 # failover demo stays visible. Remove this line for a real mirror.
-ExecStart=/usr/bin/env LIFEBOAT_MIRROR_KEY_FILE={{KEY_FILE}} {{LIFEBOAT_DIR}}/node_modules/.bin/tsx scripts/seed-demo.ts demo-mirrors
+ExecStart=/usr/bin/env MIRRORLEASE_MIRROR_KEY_FILE={{KEY_FILE}} {{MIRRORLEASE_DIR}}/node_modules/.bin/tsx scripts/seed-demo.ts demo-mirrors

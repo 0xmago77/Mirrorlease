@@ -1,4 +1,4 @@
-// Entity shapes for Lifeboat, and the code that turns them into Arkiv creates and back.
+// Entity shapes for Mirrorlease, and the code that turns them into Arkiv creates and back.
 // The full description lives in arkiv/schema.md; keep the two in sync.
 
 import type { CreateEntityParameters, Entity } from "@arkiv-network/sdk"
@@ -60,7 +60,7 @@ export type MirrorRecord = EntityMeta & {
   note: string
 }
 
-export type LifeboatRecord = AppRecord | ReleaseRecord | RevocationRecord | MirrorRecord
+export type MirrorleaseRecord = AppRecord | ReleaseRecord | RevocationRecord | MirrorRecord
 
 const SHA256_RE = /^[0-9a-f]{64}$/
 const APP_ID_RE = /^[a-z0-9][a-z0-9._-]{0,63}$/
@@ -212,7 +212,7 @@ export function mirrorCreate(input: {
 
 // ---------------------------------------------------------------------------------------------
 // Decoding. Everything read from Arkiv is untrusted input: anyone can write an entity with
-// lb = "1", so a malformed one is dropped rather than allowed to throw through the UI.
+// ml = "1", so a malformed one is dropped rather than allowed to throw through the UI.
 
 type AttrMap = Record<string, { type: string; value: unknown }>
 
@@ -255,7 +255,7 @@ function meta(entity: Entity): EntityMeta | null {
   }
 }
 
-export function decodeEntity(entity: Entity): LifeboatRecord | null {
+export function decodeEntity(entity: Entity): MirrorleaseRecord | null {
   const m = meta(entity)
   const attrs = (entity.attributes ?? {}) as unknown as AttrMap
   if (!m || str(attrs, NAMESPACE_ATTR) !== NAMESPACE_VALUE) return null
@@ -340,14 +340,14 @@ export function decodeEntity(entity: Entity): LifeboatRecord | null {
   return null
 }
 
-export function decodeAll<T extends LifeboatRecord["kind"]>(
+export function decodeAll<T extends MirrorleaseRecord["kind"]>(
   entities: Entity[],
   kind: T,
-): Extract<LifeboatRecord, { kind: T }>[] {
-  const out: Extract<LifeboatRecord, { kind: T }>[] = []
+): Extract<MirrorleaseRecord, { kind: T }>[] {
+  const out: Extract<MirrorleaseRecord, { kind: T }>[] = []
   for (const e of entities) {
     const r = decodeEntity(e)
-    if (r && r.kind === kind) out.push(r as Extract<LifeboatRecord, { kind: T }>)
+    if (r && r.kind === kind) out.push(r as Extract<MirrorleaseRecord, { kind: T }>)
   }
   return out
 }

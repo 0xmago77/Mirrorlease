@@ -1,5 +1,5 @@
-// Key loading and the wallet client. Keys come only from LIFEBOAT_KEY_FILE (a path) or
-// LIFEBOAT_PRIVATE_KEY; they are never printed, logged or written anywhere.
+// Key loading and the wallet client. Keys come only from MIRRORLEASE_KEY_FILE (a path) or
+// MIRRORLEASE_PRIVATE_KEY; they are never printed, logged or written anywhere.
 
 import { appendFileSync, readFileSync } from "node:fs"
 import { createWalletClient, type WalletArkivClient } from "@arkiv-network/sdk"
@@ -11,11 +11,11 @@ import type { Client } from "../core/queries"
 import type { Hex } from "../core/schema"
 
 export function loadPrivateKey(): Hex {
-  const file = process.env.LIFEBOAT_KEY_FILE
-  let raw = process.env.LIFEBOAT_PRIVATE_KEY
+  const file = process.env.MIRRORLEASE_KEY_FILE
+  let raw = process.env.MIRRORLEASE_PRIVATE_KEY
   if (!raw && file) raw = readFileSync(file, "utf8")
   if (!raw) {
-    throw new Error("this command signs a transaction: set LIFEBOAT_KEY_FILE=/path/to/key or LIFEBOAT_PRIVATE_KEY")
+    throw new Error("this command signs a transaction: set MIRRORLEASE_KEY_FILE=/path/to/key or MIRRORLEASE_PRIVATE_KEY")
   }
   const k = raw.trim()
   const hex = (k.startsWith("0x") ? k : `0x${k}`) as Hex
@@ -34,14 +34,14 @@ export function makeSigner(rpcUrl: string): Signer {
 export type GasRecord = { op: string; txHash: Hash; gasUsed: bigint; costWei: bigint }
 
 /**
- * Reads the receipt for gas used and price paid. If LIFEBOAT_GAS_LOG is set, appends a markdown
+ * Reads the receipt for gas used and price paid. If MIRRORLEASE_GAS_LOG is set, appends a markdown
  * table row there, which is how the numbers in the friction report were collected.
  */
 export async function recordGas(client: Client, op: string, txHash: Hash): Promise<GasRecord> {
   const receipt = await client.getTransactionReceipt({ hash: txHash })
   const costWei = receipt.gasUsed * (receipt.effectiveGasPrice ?? 0n)
   const rec = { op, txHash, gasUsed: receipt.gasUsed, costWei }
-  const log = process.env.LIFEBOAT_GAS_LOG
+  const log = process.env.MIRRORLEASE_GAS_LOG
   if (log) {
     appendFileSync(log, `| ${new Date().toISOString()} | ${op} | ${receipt.gasUsed} | ${formatEther(costWei)} | ${txHash} |\n`)
   }

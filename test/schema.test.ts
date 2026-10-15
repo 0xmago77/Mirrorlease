@@ -47,7 +47,7 @@ describe("schema", () => {
   it("drops entities outside the namespace or with bad fields", () => {
     const p = releaseCreate({ app: "demo", version: 1, sha256: SHA_A, size: 1, channel: "beta", versionName: "a", fileName: "a" })
     const e = asEntity(p)
-    ;(e.attributes as Record<string, unknown>).lb = { type: "str", value: "2" }
+    ;(e.attributes as Record<string, unknown>).ml = { type: "str", value: "2" }
     expect(decodeEntity(e)).toBeNull()
     const e2 = asEntity(p)
     ;(e2.attributes as Record<string, unknown>).sha256 = { type: "str", value: "zz" }

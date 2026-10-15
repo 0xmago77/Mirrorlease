@@ -1,4 +1,4 @@
-// lifeboat: publish, mirror and verify software releases on Arkiv.
+// mirrorlease: publish, mirror and verify software releases on Arkiv.
 
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs"
 import { basename, join, resolve } from "node:path"
@@ -65,39 +65,39 @@ type Ctx = {
   signer: () => Signer
 }
 
-const HELP = `lifeboat ${VERSION}: software releases that survive a blocked or hacked website.
+const HELP = `mirrorlease ${VERSION}: software releases that survive a blocked or hacked website.
 
 Readers (no key needed):
-  lifeboat status <app> --publisher <0x..>              releases, revocations, live mirrors
-  lifeboat verify <file> --publisher <0x..> [--app id]  OK / TAMPERED / REVOKED / EOL / UNKNOWN_PUBLISHER
-  lifeboat fetch <app> --publisher <0x..> [--out f]     download from the first mirror that serves
+  mirrorlease status <app> --publisher <0x..>              releases, revocations, live mirrors
+  mirrorlease verify <file> --publisher <0x..> [--app id]  OK / TAMPERED / REVOKED / EOL / UNKNOWN_PUBLISHER
+  mirrorlease fetch <app> --publisher <0x..> [--out f]     download from the first mirror that serves
                  [--channel stable|beta] [--vouch]      the published bytes; --vouch renews its lease
                  [--url <u>]                            also try this URL (last), still hash-checked
-  lifeboat updates <app> --publisher <0x..> --since <versionCode>
-  lifeboat watch <app> --publisher <0x..>               print revocations and new mirrors live (WebSocket)
+  mirrorlease updates <app> --publisher <0x..> --since <versionCode>
+  mirrorlease watch <app> --publisher <0x..>               print revocations and new mirrors live (WebSocket)
 
 Publisher (key needed):
-  lifeboat app create --app <id> --name <name> [--description d] [--homepage url]
-  lifeboat app handoff <newOwner> --app <id>            hand the app entity to a new maintainer
-  lifeboat publish <file> --app <id> --version 1.2.3 [--code n] [--channel stable|beta] [--notes t] [--days n]
-  lifeboat support <sha256> --days <n>                  extend a release's support window
-  lifeboat revoke <sha256> --reason <text> [--severity 1-3]
+  mirrorlease app create --app <id> --name <name> [--description d] [--homepage url]
+  mirrorlease app handoff <newOwner> --app <id>            hand the app entity to a new maintainer
+  mirrorlease publish <file> --app <id> --version 1.2.3 [--code n] [--channel stable|beta] [--notes t] [--days n]
+  mirrorlease support <sha256> --days <n>                  extend a release's support window
+  mirrorlease revoke <sha256> --reason <text> [--severity 1-3]
                  [--replacement <file> --version x.y.z [--channel c] [--notes t]]   one atomic batch
 
 Mirror operator (key needed):
-  lifeboat mirror add <url> --sha256 <hash> [--region r] [--note t]   downloads and checks first
-  lifeboat mirror list [--operator 0x..]
-  lifeboat keeper --once                                 re-check own mirrors, renew only on a match
-  lifeboat whoami
+  mirrorlease mirror add <url> --sha256 <hash> [--region r] [--note t]   downloads and checks first
+  mirrorlease mirror list [--operator 0x..]
+  mirrorlease keeper --once                                 re-check own mirrors, renew only on a match
+  mirrorlease whoami
 
 Common flags:
   --json                 machine-readable output
   --cost                 print RPC requests and query budget used (stderr)
-  --rpc <url>            any Arkiv RPC endpoint (default ${RPC_HTTP}), or LIFEBOAT_RPC
+  --rpc <url>            any Arkiv RPC endpoint (default ${RPC_HTTP}), or MIRRORLEASE_RPC
 Env:
-  LIFEBOAT_PUBLISHER     default for --publisher
-  LIFEBOAT_KEY_FILE      path to a file holding the private key (or LIFEBOAT_PRIVATE_KEY)
-  LIFEBOAT_GAS_LOG       append gas used per transaction to this file
+  MIRRORLEASE_PUBLISHER     default for --publisher
+  MIRRORLEASE_KEY_FILE      path to a file holding the private key (or MIRRORLEASE_PRIVATE_KEY)
+  MIRRORLEASE_GAS_LOG       append gas used per transaction to this file
 `
 
 async function main(argv: string[]): Promise<number> {
@@ -116,7 +116,7 @@ async function main(argv: string[]): Promise<number> {
     line(VERSION)
     return 0
   }
-  const rpc = args.str("rpc", "LIFEBOAT_RPC") ?? RPC_HTTP
+  const rpc = args.str("rpc", "MIRRORLEASE_RPC") ?? RPC_HTTP
   let signer: Signer | undefined
   const ctx: Ctx = {
     args,
@@ -166,7 +166,7 @@ async function main(argv: string[]): Promise<number> {
 // helpers
 
 function publisherArg(args: Args): Hex {
-  const p = args.req("publisher", "LIFEBOAT_PUBLISHER")
+  const p = args.req("publisher", "MIRRORLEASE_PUBLISHER")
   if (!isAddress(p)) throw new UsageError(`--publisher is not an address: ${p}`)
   return lower(p)
 }
@@ -207,7 +207,7 @@ async function myAppEntity(ctx: Ctx, app: string, me: Hex) {
 
 async function ownedAbout(ctx: Ctx, me: Hex, shas: string[]) {
   const bySha = shas.length === 1 ? eq("sha256", shas[0]!) : or(...shas.map((h) => eq("sha256", h)))
-  return decodeMany(await fetchAll(ctx.client.select("*").where(eq("lb", "1"), bySha).ownedBy(me)))
+  return decodeMany(await fetchAll(ctx.client.select("*").where(eq("ml", "1"), bySha).ownedBy(me)))
 }
 
 async function findOwnRelease(ctx: Ctx, sha: string, me: Hex): Promise<ReleaseRecord | undefined> {
@@ -424,7 +424,7 @@ async function mirrorAddCmd(ctx: Ctx): Promise<number> {
   // The release tells us the app id and the size. Any creator: the operator is not the one who has
   // to trust it; every downloader checks against their own pinned publisher anyway.
   // One query: everything live with this hash (its releases, and the mirrors already registered).
-  const about = decodeMany(await fetchAll(ctx.client.select("*").where(eq("lb", "1"), eq("sha256", sha))))
+  const about = decodeMany(await fetchAll(ctx.client.select("*").where(eq("ml", "1"), eq("sha256", sha))))
   const releases = about.filter((r): r is ReleaseRecord => r.kind === "release")
   const app = assertAppId(args.str("app") ?? releases[0]?.app ?? "")
   const size = releases[0]?.size
@@ -782,12 +782,12 @@ main(process.argv.slice(2)).then(
   },
   (e: unknown) => {
     if (e instanceof UsageError) {
-      err(`lifeboat: ${e.message}\nrun "lifeboat help" for usage`)
+      err(`mirrorlease: ${e.message}\nrun "mirrorlease help" for usage`)
       process.exit(64)
     }
-    err(`lifeboat: ${describeError(e)}`)
+    err(`mirrorlease: ${describeError(e)}`)
     printCost()
-    if (process.env.LIFEBOAT_DEBUG) err(String((e as Error)?.stack ?? e))
+    if (process.env.MIRRORLEASE_DEBUG) err(String((e as Error)?.stack ?? e))
     process.exit(1)
   },
 )

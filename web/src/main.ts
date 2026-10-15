@@ -37,7 +37,7 @@ import {
 import { append, clear, h, safeLink } from "./dom"
 
 /** The demo publisher. In real use the address comes from the project's own README or tag. */
-const DEMO_APP = "lifeboat-cli"
+const DEMO_APP = "mirrorlease-cli"
 const DEMO_PUBLISHER = "0x8fb633d00b49d851dbff111b0d7c1eec8f9dcea2" as Hex
 
 const view = document.getElementById("view")!
@@ -75,7 +75,7 @@ function route() {
 // pins: trust on first use. The address in a link is only a claim; once you confirm it for an app,
 // a later link that pins a different address for the same app is flagged.
 
-const PIN_KEY = "lifeboat:pins"
+const PIN_KEY = "mirrorlease:pins"
 
 function loadPins(): Record<string, string> {
   try {
@@ -151,7 +151,7 @@ function trustExplainer() {
     h(
       "p",
       {},
-      "You should not have to. The publisher address is the only thing you trust, and it has to come from the project itself: its README, a signed git tag, a QR code at a talk, a package you already have. Lifeboat then shows only Arkiv entities whose $creator is that address. $creator is set by the chain when an entity is created and can never be changed, unlike attributes or payloads, which anyone can write.",
+      "You should not have to. The publisher address is the only thing you trust, and it has to come from the project itself: its README, a signed git tag, a QR code at a talk, a package you already have. Mirrorlease then shows only Arkiv entities whose $creator is that address. $creator is set by the chain when an entity is created and can never be changed, unlike attributes or payloads, which anyone can write.",
     ),
     h(
       "p",
@@ -186,7 +186,7 @@ function homeView() {
     h("section", { class: "hero" },
       h("h1", {}, "Downloads that keep working when the website doesn't."),
       h("p", { class: "lede" },
-        "When a project's site or GitHub is blocked, seized or hacked, its users lose the one place they knew to get the real file. Lifeboat keeps the release hashes on Arkiv, signed by the publisher's wallet, and lets anyone run a mirror. This page finds a mirror that still works and checks the bytes before you get them.",
+        "When a project's site or GitHub is blocked, seized or hacked, its users lose the one place they knew to get the real file. Mirrorlease keeps the release hashes on Arkiv, signed by the publisher's wallet, and lets anyone run a mirror. This page finds a mirror that still works and checks the bytes before you get them.",
       ),
     ),
     h("form", { class: "card pin", onsubmit: go },
@@ -199,9 +199,9 @@ function homeView() {
       h("div", { class: "card" }, h("h3", {}, "Publisher"),
         h("p", {}, "Writes a release entity per build: version, sha256, size, channel. Its Entity Expiration is the support window; when it ends, the build is end-of-life. A compromised build gets a revocation entity, written together with the fixed release in one transaction.")),
       h("div", { class: "card" }, h("h3", {}, "Mirror operator"),
-        h("p", {}, "Registers a URL that serves the exact file. The mirror entity is a 6 hour lease. A keeper re-downloads it every two hours and renews the lease only if the bytes still match. Any user who verified a download may renew it too (lifeboat fetch --vouch). A mirror that goes bad simply lapses.")),
+        h("p", {}, "Registers a URL that serves the exact file. The mirror entity is a 6 hour lease. A keeper re-downloads it every two hours and renews the lease only if the bytes still match. Any user who verified a download may renew it too (mirrorlease fetch --vouch). A mirror that goes bad simply lapses.")),
       h("div", { class: "card" }, h("h3", {}, "User"),
-        h("p", {}, "Pins the publisher address once. Lifeboat reads Arkiv directly, tries mirrors freshest lease first, hashes the file locally and refuses anything that does not match. Revocations show up live over a WebSocket.")),
+        h("p", {}, "Pins the publisher address once. Mirrorlease reads Arkiv directly, tries mirrors freshest lease first, hashes the file locally and refuses anything that does not match. Revocations show up live over a WebSocket.")),
     ),
     trustExplainer(),
   ])
@@ -528,7 +528,7 @@ function checkView(params: URLSearchParams) {
   const app = params.get("app") ?? ""
   const pub = params.get("publisher") || (app && pins[app]) || DEMO_PUBLISHER
   const pubInput = h("input", { value: pub, class: "mono", spellcheck: "false", "aria-label": "Publisher address" })
-  const appInput = h("input", { value: app, placeholder: "optional, e.g. lifeboat-cli", spellcheck: "false", "aria-label": "App id" })
+  const appInput = h("input", { value: app, placeholder: "optional, e.g. mirrorlease-cli", spellcheck: "false", "aria-label": "App id" })
   const fileInput = h("input", { type: "file" })
   const result = h("div", {})
   const drop = h("label", { class: "drop" }, h("strong", {}, "Drop a file here"), h("span", { class: "muted" }, " or click to choose one. It is hashed locally and never uploaded."), fileInput)
@@ -603,10 +603,10 @@ function checkView(params: URLSearchParams) {
       h("h3", {}, "What the answers mean"),
       h("dl", { class: "kv" }, (Object.keys(VERDICT_TEXT) as Verdict[]).flatMap((v) => [h("dt", {}, chip(v.replace("_", " "), CHIP_TONE[v])), h("dd", {}, VERDICT_TEXT[v])])),
       h("p", { class: "muted small" }, "Try it with the demo files: ",
-        h("a", { href: `${import.meta.env.BASE_URL}dist/lifeboat-cli-0.1.0.tgz`, download: true }, "0.1.0"), " (OK), ",
-        h("a", { href: `${import.meta.env.BASE_URL}dist/lifeboat-cli-0.0.9.tgz`, download: true }, "0.0.9"), " (revoked), ",
-        h("a", { href: `${import.meta.env.BASE_URL}dist/lifeboat-cli-0.0.8.tgz`, download: true }, "0.0.8"), " (end-of-life), ",
-        h("a", { href: `${import.meta.env.BASE_URL}dist/tampered/lifeboat-cli-0.1.0.tgz`, download: true }, "tampered 0.1.0"), " (tampered)."),
+        h("a", { href: `${import.meta.env.BASE_URL}dist/mirrorlease-cli-0.1.0.tgz`, download: true }, "0.1.0"), " (OK), ",
+        h("a", { href: `${import.meta.env.BASE_URL}dist/mirrorlease-cli-0.0.9.tgz`, download: true }, "0.0.9"), " (revoked), ",
+        h("a", { href: `${import.meta.env.BASE_URL}dist/mirrorlease-cli-0.0.8.tgz`, download: true }, "0.0.8"), " (end-of-life), ",
+        h("a", { href: `${import.meta.env.BASE_URL}dist/tampered/mirrorlease-cli-0.1.0.tgz`, download: true }, "tampered 0.1.0"), " (tampered)."),
     ),
   ])
 }
@@ -638,7 +638,7 @@ const publisher = "${pub}"
 
 const page = await client
   .select("*")
-  .where(eq("lb", "1"), eq("kind", "release"), eq("app", "${app}"))
+  .where(eq("ml", "1"), eq("kind", "release"), eq("app", "${app}"))
   .createdBy(publisher)          // the trust decision: $creator, never a writable field
   .limit(200)
   .fetch()
@@ -655,11 +655,11 @@ console.log(releases)`
     h("section", { class: "card" },
       h("h2", {}, "With the TypeScript SDK"),
       h("pre", {}, h("code", {}, sdk)),
-      h("p", { class: "muted small" }, "Or install the CLI from any mirror and run: ", h("code", {}, `lifeboat fetch ${app} --publisher ${pub}`)),
+      h("p", { class: "muted small" }, "Or install the CLI from any mirror and run: ", h("code", {}, `mirrorlease fetch ${app} --publisher ${pub}`)),
     ),
     h("section", { class: "card" },
       h("h2", {}, "With plain JSON-RPC"),
-      h("p", { class: "muted" }, "arkiv_query takes the query text and a selection. These are the exact queries Lifeboat sends. The public RPC bills each arkiv_query the same, whatever it returns, so Lifeboat fetches several kinds at once with OR and sorts on the client."),
+      h("p", { class: "muted" }, "arkiv_query takes the query text and a selection. These are the exact queries Mirrorlease sends. The public RPC bills each arkiv_query the same, whatever it returns, so Mirrorlease fetches several kinds at once with OR and sorts on the client."),
       queries.map(([title, q]) => [h("h3", {}, title), h("pre", {}, h("code", {}, curl(q)))]),
       h("p", { class: "muted small" },
         "Expiry comes back as a block number. arkiv_getBlockTiming returns the current block and its timestamp, and blocks are 2 seconds apart, which is how the page turns blocks into dates."),

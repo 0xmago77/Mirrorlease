@@ -63,7 +63,7 @@ export async function meteredFetch(input: RequestInfo | URL, init?: RequestInit)
   const wait = Number.isFinite(retry) && retry > 0 ? ` Resets in about ${Math.ceil(retry / 60)} min.` : ""
   const message =
     `Arkiv RPC refused the request (HTTP 429): ${detail}.${wait} ` +
-    "Try again later, or point Lifeboat at another Arkiv RPC endpoint."
+    "Try again later, or point Mirrorlease at another Arkiv RPC endpoint."
   const ids = requestIds(init?.body)
   const errors = ids.map((id) => ({ jsonrpc: "2.0", id, error: { code: BUDGET_ERROR_CODE, message } }))
   return new Response(JSON.stringify(errors.length === 1 ? errors[0] : errors), {

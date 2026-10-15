@@ -1,6 +1,6 @@
 # Friction report
 
-Everything here was hit while building Lifeboat, between 2026-10-14 and 2026-10-15, against the
+Everything here was hit while building Mirrorlease, between 2026-10-14 and 2026-10-15, against the
 Tiramisu testnet. Nothing is hypothetical; each item has the steps we used to reproduce it.
 
 Environment for all items unless noted: `@arkiv-network/sdk` 0.8.1, `viem` 2.57.7, Node 26.7.0 on
@@ -79,7 +79,7 @@ history lookups emptied the budget. After restructuring around single OR queries
 
 | view | before | after |
 |---|---|---|
-| app page / `lifeboat status` | 600 | 100 (200 after a maintainer handoff) |
+| app page / `mirrorlease status` | 600 | 100 (200 after a maintainer handoff) |
 | check a file, published and live | 500 | 100 |
 | check a file that has expired (EOL) | 500 + 100 per expired entity of the publisher | 100 + 100 per history block actually read (1 in our tests) |
 
@@ -128,7 +128,7 @@ events by range.
 
 Surface: `arkiv_query`, Entity Expiration.
 
-This is a design consequence more than a bug, but it cost us real time. Lifeboat wants to tell a
+This is a design consequence more than a bug, but it cost us real time. Mirrorlease wants to tell a
 user "this file was version 0.0.8, its support ended on <date>", which is the whole point of using
 expiration as a support window. After expiry the entity no longer matches any query at the head,
 and there is no "include expired" option.
@@ -235,16 +235,16 @@ Gas price on Tiramisu was about 1 gwei throughout, so costs below are in GLM at 
 
 | operation | runs | gas used (each) | GLM (each) |
 |---|---|---|---|
-| app create | 2 | 96072–98616 | 0.000099 |
-| publish beta | 4 | 116136–117912 | 0.000118 |
-| revoke + replacement (batch) | 2 | 228280–230280 | 0.000230 |
+| app create | 3 | 96072–98760 | 0.000099 |
+| publish beta | 5 | 116136–117960 | 0.000118 |
+| revoke + replacement (batch) | 3 | 228280–230328 | 0.000230 |
 | support (lifetime extension) | 1 | 25240 | 0.000025 |
 | mirror add | 2 | 106232–111680 | 0.000112 |
 | mirror add (skip-check) | 1 | 106552 | 0.000107 |
 | vouch (permissionless lease extension) | 1 | 25210 | 0.000025 |
 | keeper renew lease | 2 | 25210 | 0.000025 |
 | app handoff | 1 | 25430 | 0.000025 |
-| publish stable | 1 | 116680 | 0.000117 |
+| publish stable | 2 | 116680–116728 | 0.000117 |
 
-Total for the 17 logged transactions while building and seeding the demo: 0.001687 GLM. (Two more, a maintainer publish and a maintainer revoke during the browser test, ran without the gas log.)
+Total for the 21 logged transactions while building and seeding the demo (including the re-seed after the rename to Mirrorlease): 0.002251 GLM. (Two more, a maintainer publish and a maintainer revoke during the browser test, ran without the gas log.)
 

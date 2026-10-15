@@ -1,4 +1,4 @@
-// Every Arkiv read Lifeboat makes. arkiv/schema.md quotes these; keep them in sync.
+// Every Arkiv read Mirrorlease makes. arkiv/schema.md quotes these; keep them in sync.
 //
 // The public RPC charges a flat 100 units per arkiv_query (whatever it selects or returns) against
 // an anonymous budget of 10000 units, while getBlockTiming and eth_getLogs are free. So the views
@@ -20,7 +20,7 @@ import {
   PAGE_SIZE,
   RPC_HTTP,
 } from "./constants"
-import { decodeAll, decodeEntity, type Hex, type LifeboatRecord, type MirrorRecord, type ReleaseRecord } from "./schema"
+import { decodeAll, decodeEntity, type Hex, type MirrorleaseRecord, type MirrorRecord, type ReleaseRecord } from "./schema"
 import { arkivHttp } from "./rpc"
 import type { Clock } from "./time"
 import { roleOf, signersFor, type Trust } from "./trust"
@@ -52,8 +52,8 @@ export async function fetchAll(builder: Builder, maxPages = 5): Promise<Entity[]
   return out
 }
 
-export function decodeMany(entities: Entity[]): LifeboatRecord[] {
-  return entities.map(decodeEntity).filter((r): r is LifeboatRecord => r !== null)
+export function decodeMany(entities: Entity[]): MirrorleaseRecord[] {
+  return entities.map(decodeEntity).filter((r): r is MirrorleaseRecord => r !== null)
 }
 
 export async function getClock(client: Client): Promise<Clock> {

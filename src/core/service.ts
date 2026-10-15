@@ -3,7 +3,7 @@
 
 import { sortMirrors } from "./download"
 import { type Client, decodeMany, fetchAll, findExpiredRelease, getClock, Q } from "./queries"
-import type { AppRecord, Hex, LifeboatRecord, MirrorRecord, ReleaseRecord, RevocationRecord } from "./schema"
+import type { AppRecord, Hex, MirrorleaseRecord, MirrorRecord, ReleaseRecord, RevocationRecord } from "./schema"
 import type { Clock } from "./time"
 import { buildTrust, lower, roleOf, type SignerRole, type Trust } from "./trust"
 import { computeVerdict, type VerdictResult } from "./verdict"
@@ -27,8 +27,8 @@ export type AppStatus = {
   allMirrors: MirrorRecord[]
 }
 
-const ofKind = <K extends LifeboatRecord["kind"]>(records: LifeboatRecord[], kind: K) =>
-  records.filter((r): r is Extract<LifeboatRecord, { kind: K }> => r.kind === kind)
+const ofKind = <K extends MirrorleaseRecord["kind"]>(records: MirrorleaseRecord[], kind: K) =>
+  records.filter((r): r is Extract<MirrorleaseRecord, { kind: K }> => r.kind === kind)
 
 function dedupe<T extends { key: string }>(items: T[]): T[] {
   const seen = new Set<string>()
@@ -42,7 +42,7 @@ export function pickRecommended(releases: ReleaseView[], channel?: string): Rele
 }
 
 /** Pure: builds the app view from whatever records the queries returned. */
-export function buildAppStatus(publisher: Hex, appId: string, records: LifeboatRecord[], clock: Clock, opts: { channel?: string } = {}): AppStatus {
+export function buildAppStatus(publisher: Hex, appId: string, records: MirrorleaseRecord[], clock: Clock, opts: { channel?: string } = {}): AppStatus {
   const all = dedupe(records).filter((r) => r.app === appId)
   const trust = buildTrust(publisher, ofKind(all, "app"))
   const revocations = ofKind(all, "revocation").filter((r) => roleOf(trust, r.creator, r.app))
