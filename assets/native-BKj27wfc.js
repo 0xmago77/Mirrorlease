@@ -1,0 +1,1 @@
+function e(){if(typeof WebSocket<`u`)return WebSocket;if(global.WebSocket!==void 0)return global.WebSocket;if(window.WebSocket!==void 0)return window.WebSocket;if(self.WebSocket!==void 0)return self.WebSocket;throw Error("`WebSocket` is not supported in this environment")}var t=e();export{t as WebSocket};
