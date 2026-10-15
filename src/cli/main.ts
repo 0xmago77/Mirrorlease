@@ -1,7 +1,7 @@
 // lifeboat: publish, mirror and verify software releases on Arkiv.
 
-import { readFileSync, writeFileSync } from "node:fs"
-import { basename, resolve } from "node:path"
+import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs"
+import { basename, join, resolve } from "node:path"
 import { eq, or } from "@arkiv-network/sdk/query"
 import { ExpirationTime } from "@arkiv-network/sdk/utils"
 import { formatEther, type Hash } from "viem"
@@ -675,7 +675,9 @@ async function fetchCmd(ctx: Ctx): Promise<number> {
     }
     throw e
   }
-  const out = resolve(args.str("out") ?? (rel.fileName || `${app}-${rel.versionName}`))
+  const defaultName = rel.fileName || `${app}-${rel.versionName}`
+  let out = resolve(args.str("out") ?? defaultName)
+  if (existsSync(out) && statSync(out).isDirectory()) out = join(out, defaultName)
   writeFileSync(out, result.bytes)
   let vouch: Record<string, unknown> | undefined
   if (args.bool("vouch") && result.mirror.key) {
